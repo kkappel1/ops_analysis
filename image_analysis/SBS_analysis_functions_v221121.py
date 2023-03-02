@@ -931,7 +931,8 @@ def get_condensates_general_explicit( image,
                                      label,
                                      condensate_cutoff_intensity, 
                                      THRESH_STDS,
-                                     plot=True ):
+                                     plot=True,
+                                     save_file=''):
 
     # standard deviation intensity
     region_image = intensity_image
@@ -997,6 +998,11 @@ def get_condensates_general_explicit( image,
     # segment the condensates
     condensates_ = ops.process.apply_watershed(filled_cond_mask_nosmall, smooth=1)
     condensates = skimage.segmentation.clear_border(condensates_)
+
+    # optionally save the condensates to a file
+    if save_file != '':
+        save( save_file, condensates )
+
 
     if plot:
         fig, ax = plt.subplots(1,13,figsize=(10, 2))
@@ -1650,6 +1656,223 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
 
     df_nuclei = pd.DataFrame(data=nuclei_dict)
     return df_nuclei, final_nuclei
+
+def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
+                                         well_num, tile_num,
+                                         file_save_dir, min_size=1000, 
+                        smooth_size=5, threshold_initial_guess=500, 
+                        nuclei_smooth_value=20, area_min=5000, plot=False,
+                        area_max=20000, condensate_cutoff_intensity=2000,
+                        THRESH_STDS=5):
+    ##################
+    # segment nuclei from dapi image
+    ##################
+    dapi_image = read( fname_dapi )
+    gfp_image = read( fname_gfp )
+    
+    final_nuclei = segment_nuclei_phenotype( dapi_image, threshold_initial_guess, smooth_size,
+                                nuclei_smooth_value, min_size, area_min, area_max, plot)
+
+
+    ##################
+    # go through the nuclei and try to find condensates, calculate relevant properties
+    ##################
+    
+    nuclei_dict = { 
+        'nucleus_num': [],
+        'well': [],
+        'tile': [],
+        'fname_dapi': [],
+        'total_nucleus_area': [],
+        'mean_dapi_intensity': [],
+        
+        'mean_GFP_intensity_GFP': [],
+        'std_GFP_intensity_GFP': [],
+        'num_condensates_GFP': [],
+        'mean_dilute_intensity_GFP': [],
+        'std_dilute_intensity_GFP': [],
+        'mean_condensate_intensity_GFP': [],
+        'mean_condensate_intensity_no_shrink_GFP': [],
+        'std_condensate_intensity_GFP': [],
+        'std_condensate_intensity_no_shrink_GFP': [],
+        'total_cond_intensity_GFP': [],
+        'total_gfp_intensity_GFP': [],
+        'frac_gfp_in_cond_GFP': [],
+        'total_cond_area_GFP': [],
+        'cell_img_gfp_file': [],
+        'cell_img_dapi_file': [],
+        'cell_img_mask_file': [],
+        
+    }
+
+    num_nuclei = len(np.unique(final_nuclei) ) -1
+    if num_nuclei < 1:
+        df_nuclei = pd.DataFrame(data=nuclei_dict)
+        return df_nuclei, final_nuclei
+
+    properties_dapi = skimage.measure.regionprops_table( final_nuclei, intensity_image=dapi_image,
+                                        properties=('label','mean_intensity'))
+
+    #print( well_num, tile_num, fname_dapi, fname_gfp )
+    properties_gfp = skimage.measure.regionprops_table( final_nuclei, intensity_image=gfp_image, 
+                                        properties=('label','mean_intensity','max_intensity','intensity_image',
+                                                   'image','area','bbox'))
+    
+    for nucleus_index in range( len( properties_gfp['label'])):
+        nucleus_image = properties_gfp['image'][nucleus_index]
+        nucleus_area = properties_gfp['area'][nucleus_index]
+        nucleus_label = properties_gfp['label'][nucleus_index]
+        mean_dapi_intensity = properties_dapi['mean_intensity'][nucleus_index]
+    
+        mean_intensity_GFP = properties_gfp['mean_intensity'][nucleus_index]
+        max_intensity_GFP = properties_gfp['max_intensity'][nucleus_index]
+        region_image_GFP = properties_gfp['intensity_image'][nucleus_index]
+        region_pixels_GFP = region_image_GFP[nucleus_image]
+        std_intensity_GFP = np.std( region_pixels_GFP )
+        total_intensity_GFP = mean_intensity_GFP * nucleus_area
+
+        # write images to files
+        # the dapi image: nucleus_image = properties_gfp['image'][nucleus_index] (this is already masked though)
+        # the GFP image: properties_gfp['intensity_image'][nucleus_index] (this is already masked though)
+
+        #bbox = properties_gfp['bbox'][nucleus_index]
+        bbox = (properties_gfp['bbox-0'][nucleus_index],
+                properties_gfp['bbox-1'][nucleus_index],
+                properties_gfp['bbox-2'][nucleus_index],
+                properties_gfp['bbox-3'][nucleus_index])
+
+
+        # don't worry about padding for now 
+        # pad to a constant size
+        #region_size_x = bbox[2] - bbox[0]
+        #region_size_y = bbox[3] - bbox[1]
+        #pad_x_size = max(0, 185 - np.shape( unmasked_gfp_image)[0] )
+        #pad_y_size = max(0, 185 - np.shape( unmasked_gfp_image)[1] )
+
+        unmasked_region_gfp_image = gfp_image[bbox[0]:bbox[2], bbox[1]:bbox[3]]
+        unmasked_region_dapi_image = dapi_image[bbox[0]:bbox[2], bbox[1]:bbox[3]]
+        mask_region_nucleus = properties_gfp['image'][nucleus_index]
+
+        # save to file, then read the file back in and check some properties to confirm that they exactly match
+        output_fname_dapi = '{file_save_dir}/well{well_num}_field{tile_num}_cell{cell_num}_DAPI.tif'.format( 
+            file_save_dir=file_save_dir, 
+            cell_num=nucleus_label, well_num=well_num, tile_num=tile_num)
+
+        output_fname_gfp = '{file_save_dir}/well{well_num}_field{tile_num}_cell{cell_num}_GFP.tif'.format( 
+            file_save_dir=file_save_dir, 
+            cell_num=nucleus_label, well_num=well_num, tile_num=tile_num)
+
+        output_fname_condensates = '{file_save_dir}/well{well_num}_field{tile_num}_cell{cell_num}_condensates.tif'.format( 
+            file_save_dir=file_save_dir, 
+            cell_num=nucleus_label, well_num=well_num, tile_num=tile_num)
+
+        output_fname_mask = '{file_save_dir}/well{well_num}_field{tile_num}_cell{cell_num}_mask.npy'.format( 
+        #output_fname_mask = '{file_save_dir}/well{well_num}_field{tile_num}_cell{cell_num}_mask.tif'.format( 
+            file_save_dir=file_save_dir, 
+            cell_num=nucleus_label, well_num=well_num, tile_num=tile_num)
+
+
+        save( output_fname_dapi, unmasked_region_dapi_image, compress=1)
+        save( output_fname_gfp, unmasked_region_gfp_image, compress=1)
+        np.save( output_fname_mask, mask_region_nucleus )
+        # some quick checks to see if this works as expected
+        ##save( output_fname_dapi, unmasked_region_dapi_image)
+        ##save( output_fname_gfp, unmasked_region_gfp_image)
+        ##save( output_fname_mask, mask_region_nucleus)
+        ##save( output_fname_mask, mask_region_nucleus, compress=1)
+
+        #test_gfp = read( output_fname_gfp )
+        #test_mask = np.load( output_fname_mask)
+        ##test_mask = read( output_fname_mask)
+
+        ##print( "masked region before save",  unmasked_region_gfp_image[mask_region_nucleus] )
+
+        ##print( "shape_gfp", np.shape( test_gfp))
+        ##print( "shape mask", np.shape(test_mask))
+        ##print( "min/max test mask", np.min( test_mask), np.max( test_mask ) )
+        ##print( "all values", np.unique( test_mask ))
+        ##print( test_gfp )
+        ##print( test_mask )
+        ##print( test_gfp[test_mask] )
+        ##print( np.mean(test_gfp[test_mask]), mean_intensity_GFP )
+        ##print( np.mean(test_gfp[test_mask]) == mean_intensity_GFP)
+        #if np.mean(test_gfp[test_mask]) != mean_intensity_GFP: 
+        #    print( "not equal" )
+
+
+        ############
+        # Get GFP condensates
+        ############
+
+        # if intensity is below some threshold, do not look for condensates (if GFP is not actually expressed)
+#         if mean_intensity_GFP < 250. and max_intensity_GFP < 250.:
+#             # this cell does not express GFP
+#             num_condensates_GFP = 0
+#             # condensate mask - should all be false
+#             condensates_labeled_GFP = np.zeros( np.shape(nucleus.intensity_image))
+#             mean_dilute_phase_intensity_GFP = mean_intensity
+#             mean_condensate_intensity_GFP = np.nan
+#             num_condensates_GFP = 0
+#             std_dilute_phase_intensity_GFP = std_intensity
+#             std_condensate_intensity_GFP = np.nan
+#             total_condensate_intensity_GFP = 0
+#             total_condensate_area_GFP = 0
+
+#         else:
+        # get condensates 
+        (condensates_GFP, condensates_labeled_GFP, 
+         condensates_properties_dict_GFP) = get_condensates_general_explicit( nucleus_image,
+                                                                        mean_intensity_GFP,
+                                                                        nucleus_area,
+                                                                        region_image_GFP,
+                                                                        nucleus_label,
+                                                                        condensate_cutoff_intensity, 
+                                                                        THRESH_STDS,
+                                                                        plot=plot,
+                                                                        save_file=output_fname_condensates)
+
+            
+        ############
+        # add everything to dictionary
+        ############
+        
+        nuclei_dict['nucleus_num'].append(nucleus_label)
+        nuclei_dict['well'].append( well_num )
+        nuclei_dict['tile'].append( tile_num )
+        nuclei_dict['fname_dapi'].append( fname_dapi)
+        nuclei_dict['total_nucleus_area'].append( nucleus_area )
+        nuclei_dict['mean_dapi_intensity'].append( mean_dapi_intensity )
+        
+        nuclei_dict['mean_GFP_intensity_GFP'].append( mean_intensity_GFP )
+        nuclei_dict['std_GFP_intensity_GFP'].append( std_intensity_GFP )
+        nuclei_dict['num_condensates_GFP'].append( condensates_properties_dict_GFP['num_condensates'])
+        nuclei_dict['mean_dilute_intensity_GFP'].append( 
+            condensates_properties_dict_GFP['mean_dilute_phase_intensity'])
+        nuclei_dict['std_dilute_intensity_GFP'].append(
+            condensates_properties_dict_GFP['std_dilute_phase_intensity'])
+        nuclei_dict['mean_condensate_intensity_GFP'].append(
+            condensates_properties_dict_GFP['mean_condensate_intensity'])
+        nuclei_dict['mean_condensate_intensity_no_shrink_GFP'].append( 
+            condensates_properties_dict_GFP['mean_condensate_intensity_no_shrink'])
+        nuclei_dict['std_condensate_intensity_GFP'].append(
+            condensates_properties_dict_GFP['std_condensate_intensity'])
+        nuclei_dict['std_condensate_intensity_no_shrink_GFP'].append( 
+            condensates_properties_dict_GFP['std_condensate_intensity_no_shrink'])
+        nuclei_dict['total_cond_intensity_GFP'].append(
+            condensates_properties_dict_GFP['total_condensate_intensity'])
+        nuclei_dict['total_gfp_intensity_GFP'].append( total_intensity_GFP)
+        nuclei_dict['frac_gfp_in_cond_GFP'].append( 
+            condensates_properties_dict_GFP['total_condensate_intensity'] / total_intensity_GFP )
+        nuclei_dict['total_cond_area_GFP'].append( 
+            condensates_properties_dict_GFP['total_condensate_area'])
+        nuclei_dict['cell_img_gfp_file'].append( output_fname_gfp )
+        nuclei_dict['cell_img_dapi_file'].append( output_fname_dapi )
+        nuclei_dict['cell_img_mask_file'].append( output_fname_mask )
+        
+
+    df_nuclei = pd.DataFrame(data=nuclei_dict)
+    return df_nuclei, final_nuclei
+    
 
 def phenotype_phenix_2channel( fname_dapi, fname_gfp,
                                          well_num, tile_num, min_size=1000, 
