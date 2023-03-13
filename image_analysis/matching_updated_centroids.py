@@ -3,7 +3,7 @@ from ops.io import save_stack as save
 from scipy.spatial.distance import cdist
 import random
 import multiprocessing
-from SBS_analysis_functions_v221121 import *
+from .SBS_analysis_functions_v221121 import *
 from scipy.stats import linregress
 matplotlib.use('Agg')
 

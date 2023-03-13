@@ -6,9 +6,11 @@ import ops.io
 from skimage import (
     color, feature, filters, measure, morphology, segmentation, util
 )
-from skimage.feature.masked_register_translation import cross_correlate_masked
+# for skimage version 0.18
+from skimage.registration._masked_phase_cross_correlation import cross_correlate_masked
+#from skimage.feature.masked_register_translation import cross_correlate_masked
 import matplotlib
-matplotlib.use('Agg')
+#matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from skimage.morphology import disk, watershed
 from skimage.filters import threshold_otsu, rank
@@ -23,6 +25,10 @@ from ops.firesnake import Snake
 from collections import Counter
 import operator
 import math
+from .preprocess_phenotype import *
+from skimage import img_as_ubyte
+from cellpose.models import Cellpose
+
 
 
 pixel_size_40x = 0.1507
@@ -808,6 +814,29 @@ def get_nucleoli_mask_explicit( image, mean_intensity,
     
     return filled_holes_nucleoli
 
+def prepare_png_cellpose( dapi_image, save_png=False ):
+
+    blank = np.zeros_like( dapi_image ) 
+    dapi_upper = np.percentile( dapi_image, 99.5 )
+    dapi_image = dapi_image / dapi_upper
+    dapi_image[dapi_image >1] = 1
+    red, green, blue = img_as_ubyte( blank), img_as_ubyte( blank ), img_as_ubyte( dapi_image )
+
+    rgb_img = np.array([red, green, blue]).transpose([1,2,0])
+    if save_png:
+        skimage.io.imsave( 'cellpose_input.png', rgb_img )
+    return rgb_img
+
+def segment_nuclei_phenotype_cellpose( rgb, diameter, gpu=False ):
+
+    model_nuclei = Cellpose( model_type='nuclei', gpu=gpu )
+    nuclei, _, _, _ = model_nuclei.eval( rgb, channels=[3,0], diameter=diameter )
+
+    nuclei = skimage.segmentation.clear_border( nuclei )
+
+    #save( 'nuclei_cellpose.tif', nuclei )
+    return nuclei 
+
 def segment_nuclei_phenotype( dapi_image,
                              threshold_initial_guess,
                              smooth_size,
@@ -854,6 +883,8 @@ def segment_nuclei_phenotype( dapi_image,
         plt.show()
 
 
+    #save( 'dapi_img.tif', dapi_image )
+    #save( 'final_nuclei_test.tif', final_nuclei )
     return final_nuclei
 
 def get_condensate_properties( condensates, image, intensity_image, label,
@@ -1658,20 +1689,28 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
     return df_nuclei, final_nuclei
 
 def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
+                                         ffc_dapi, ffc_gfp,
                                          well_num, tile_num,
                                          file_save_dir, min_size=1000, 
                         smooth_size=5, threshold_initial_guess=500, 
                         nuclei_smooth_value=20, area_min=5000, plot=False,
                         area_max=20000, condensate_cutoff_intensity=2000,
-                        THRESH_STDS=5):
+                        THRESH_STDS=5,cellpose=True,cellpose_diameter=87):
     ##################
     # segment nuclei from dapi image
     ##################
     dapi_image = read( fname_dapi )
     gfp_image = read( fname_gfp )
+
+    dapi_image = apply_flatfield_correction( dapi_image, ffc_dapi )
+    gfp_image = apply_flatfield_correction( gfp_image, ffc_gfp )
     
-    final_nuclei = segment_nuclei_phenotype( dapi_image, threshold_initial_guess, smooth_size,
-                                nuclei_smooth_value, min_size, area_min, area_max, plot)
+    dapi_rgb = prepare_png_cellpose( dapi_image )
+    #diameter = 87
+
+    final_nuclei = segment_nuclei_phenotype_cellpose( dapi_rgb, cellpose_diameter )
+    #final_nuclei = segment_nuclei_phenotype( dapi_image, threshold_initial_guess, smooth_size,
+    #                            nuclei_smooth_value, min_size, area_min, area_max, plot)
 
 
     ##################
