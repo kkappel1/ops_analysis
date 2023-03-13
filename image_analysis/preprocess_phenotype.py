@@ -26,4 +26,6 @@ def get_flatfield_correction( list_of_files ):
 
 
 def apply_flatfield_correction( img, correction_matrix ):
-   return img / correction_matrix 
+    corrected = img / correction_matrix
+    corrected = corrected.astype( img.dtype )
+    return corrected 
