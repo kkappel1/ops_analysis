@@ -78,6 +78,8 @@ def fit_linear_40x_to_10x_from_brute_force_matches( brute_force_match_dir,
         #print( match_file_base )
         if os.path.isdir( brute_force_match_dir + '/' + match_file_base ): continue
         fbase = match_file_base.split('/')[-1].replace('.txt', '.tiff').replace('match_','')
+        if 'max' in fbase:
+            fbase = fbase.replace('max','p01')
         match_file = brute_force_match_dir + '/' + match_file_base
     
         for line in open( match_file):
@@ -143,7 +145,10 @@ def get_10x_coords_from_40x_coords( x40x, y40x, linregress_x, linregress_y ):
     return x10x, y10x
 
 def get_field_num_from_phenix_name( name ):
-    field_num = name.split('/')[-1].split('-')[0].split('f')[1].split('p')[0]
+    if "max" in name:
+        field_num = name.split('/')[-1].split('-')[0].split('f')[1].split('max')[0]
+    else:
+        field_num = name.split('/')[-1].split('-')[0].split('f')[1].split('p')[0]
     return int(field_num)
 
 def get_10x_tiles_from_coords(x10x, y10x, sites_to_xy_10x, tile_size_10x_x, tile_size_10x_y ):
@@ -174,9 +179,18 @@ def get_best_10x_image_match_from_model( file_40x, files_10x_base_name, images_4
                                             output_match_dir, scale_factor, overlap_ratio=0.5, plot=False ):
     # get the likley 10x tiles that this matches to from the xy coords
     base_file_40x = file_40x.split('/')[-1]
-    if base_file_40x not in images_40x_to_xy.keys():
+    if "max" in base_file_40x:
+        base_file_40x_key = base_file_40x.replace('max', 'p01' )
+        base_file_40x_key = base_file_40x_key.replace('.tif', '.tiff' )
+    else:
+        base_file_40x_key = base_file_40x
+
+    if base_file_40x_key not in images_40x_to_xy.keys():
+        print( "didn't find key" )
+        print( base_file_40x_key )
         return "", 0.0, [-1,-1], 0
-    x40x, y40x = images_40x_to_xy[ base_file_40x ]
+    #x40x, y40x = images_40x_to_xy[ base_file_40x ]
+    x40x, y40x = images_40x_to_xy[ base_file_40x_key ]
     x10x, y10x = get_10x_coords_from_40x_coords( x40x, y40x, linregress_x, linregress_y )
     likely_tiles_10x = get_10x_tiles_from_coords( x10x, y10x, sites_to_xy_10x, tile_size_10x_x, tile_size_10x_y )
     files_likely_tiles_10x = []
