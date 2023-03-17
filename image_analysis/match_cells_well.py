@@ -56,7 +56,7 @@ def combine_10x_40x_data( dict_40x_nuclei_to_10x_nuclei, file_40x, best_image_ma
 
 
 def combine_10x_40x_data_and_info( dict_40x_nuclei_to_10x_nuclei, file_40x, best_image_match_10x,
-                            full_df_10x_cells, full_df_nuclei ):
+                            best_cc_mag, full_df_10x_cells, full_df_nuclei ):
     # include all the matching info in the dataframe 
     df_merged_data = pd.DataFrame()
     for cell_40x in dict_40x_nuclei_to_10x_nuclei.keys():
@@ -86,6 +86,7 @@ def combine_10x_40x_data_and_info( dict_40x_nuclei_to_10x_nuclei, file_40x, best
             merged_data['match_10x_centroid_y'] = [ dict_40x_nuclei_to_10x_nuclei[ cell_40x ][ 'match_10x_centroid' ][1]]
             merged_data['match_40x_centroid_x'] = [ dict_40x_nuclei_to_10x_nuclei[ cell_40x ][ 'match_40x_centroid' ][0]]
             merged_data['match_40x_centroid_y'] = [ dict_40x_nuclei_to_10x_nuclei[ cell_40x ][ 'match_40x_centroid' ][1]]
+            merged_data['match_file_cc_mag'] = [ best_cc_mag ]
             df_merged_data = df_merged_data.append( merged_data )
     return df_merged_data
 
@@ -99,46 +100,52 @@ def get_well_and_tile_num_from_fname_10x( fname ):
 
 
 
-def match_well():
+def match_well( plate_num, well_num, out_tag, NUM_PROCESSES, list_of_files_40x, 
+                data_file_10x, data_file_40x, nd2_file_well, match_file_dir, 
+                nuclei_mask_dir_40x, nuclei_mask_dir_10x,
+                THRESHOLD_CC_MATCH=0.30 ):
 
-    NUM_PROCESSES = 1
-    THRESHOLD_CC_MATCH = 0.30
-    plate_num = 10
-    well_num = 'B2'
-    out_tag = 'test_match'
+    #NUM_PROCESSES = 1
+    #THRESHOLD_CC_MATCH = 0.30
+    #plate_num = 10
+    #well_num = 'B2'
+    #out_tag = 'test_match'
     
-    # list of files that I want to match
-    list_of_files_40x = [
-    "phenotype_images/plate_10/well_B2/r02c02f110p01-ch1sk1fk1fl1.tiff",
-    "phenotype_images/plate_10/well_B2/r02c02f111p01-ch1sk1fk1fl1.tiff",
-    "phenotype_images/plate_10/well_B2/r02c02f112p01-ch1sk1fk1fl1.tiff",
-    "phenotype_images/plate_10/well_B2/r02c02f113p01-ch1sk1fk1fl1.tiff"
-    ]
-    print( list_of_files_40x )
-    
-    # load the df for the 10x cells that I want to match
-    full_df_10x_cells = pd.read_csv( "process_cellpose_nophenotype_all/10X_B2_Tile-8.filtered_cells.csv")
-    df_2 = pd.read_csv( "process_cellpose_nophenotype_all/10X_B2_Tile-9.filtered_cells.csv" )
-    full_df_10x_cells = full_df_10x_cells.append( df_2 )
+#    # list of files that I want to match
+#    list_of_files_40x = [
+#    "phenotype_images/plate_10/well_B2/r02c02f110p01-ch1sk1fk1fl1.tiff",
+#    "phenotype_images/plate_10/well_B2/r02c02f111p01-ch1sk1fk1fl1.tiff",
+#    "phenotype_images/plate_10/well_B2/r02c02f112p01-ch1sk1fk1fl1.tiff",
+#    "phenotype_images/plate_10/well_B2/r02c02f113p01-ch1sk1fk1fl1.tiff"
+#    ]
+
+#    # load the df for the 10x cells that I want to match
+#    full_df_10x_cells = pd.read_csv( "process_cellpose_nophenotype_all/10X_B2_Tile-8.filtered_cells.csv")
+#    df_2 = pd.read_csv( "process_cellpose_nophenotype_all/10X_B2_Tile-9.filtered_cells.csv" )
+#    full_df_10x_cells = full_df_10x_cells.append( df_2 )
+
+    full_df_10x_cells = pd.read_csv( data_file_10x )
     
     # load the df for the 40x cells
-    full_df_nuclei = pd.read_csv('phenotype_data_plate_10_well_B2_test_script.csv' )
+#    full_df_nuclei = pd.read_csv('phenotype_data_plate_10_well_B2_test_script.csv' )
+    full_df_nuclei = pd.read_csv( data_file_40x )
     
     
     # get xy coords from nd2 file
-    plate_10_nd2_file = 'plate_10_nd2_file/WellB2_ChannelKK_SBS_DAPI,KK_SBS_Cy3,KK_SBS_A594,KK_SBS_Cy5,KK_SBS_Cy7,SBS_Cy7_s4,SBS_Cy5_s1,SBS_Cy5_s4_Seq0000.nd2'
-    sites_to_xy_10x = map_10x_fields_to_xy_coords( plate_10_nd2_file )
+#    plate_10_nd2_file = 'plate_10_nd2_file/WellB2_ChannelKK_SBS_DAPI,KK_SBS_Cy3,KK_SBS_A594,KK_SBS_Cy5,KK_SBS_Cy7,SBS_Cy7_s4,SBS_Cy5_s1,SBS_Cy5_s4_Seq0000.nd2'
+#    sites_to_xy_10x = map_10x_fields_to_xy_coords( plate_10_nd2_file )
+    sites_to_xy_10x = map_10x_fields_to_xy_coords( nd2_file_well )
     
     # match dir
-    match_dir = 'match_all_plate_10_well_B2/'
+    #match_dir = 'match_all_plate_10_well_B2/'
     
     # need to get all the 40x nuclei masks
-    nuclei_mask_dir_40x = 'nuclei_masks_plate_10_well_B2_test_script'
+    #nuclei_mask_dir_40x = 'nuclei_masks_plate_10_well_B2_test_script'
     #dict_40x_nuclei_masks[ file_40x ]
     
     # need to get all the 10x nuclei masks
     # can read from the .nuclei tif files
-    results_dir_10x = 'process_cellpose_nophenotype_all/'
+    #results_dir_10x = 'process_cellpose_nophenotype_all/'
 
     pixel_size_10x = 0.841792491782224
     pixel_size_40x = 0.14949402023919043
@@ -161,6 +168,7 @@ def match_well():
     phenotype_10x_fnames = []
     phenotype_40x_fnames = []
     best_shifts = []
+    best_cc_mags = []
     best_image_match_10xs = []
     plot=True
     THRESHOLD_MOST_FREQ_FRACTION = 0.5 
@@ -181,7 +189,7 @@ def match_well():
         nuclei_mask_unique_indices = []
         for i, file_40x in enumerate(list_of_files_40x):
             base_fname = file_40x.split('/')[-1].split('.tif')[0]
-            match_fname = f'{match_dir}/match_{base_fname}.txt'
+            match_fname = f'{match_file_dir}/match_{base_fname}.txt'
             if not os.path.exists( match_fname ):
                 continue
             for line in open(match_fname):
@@ -203,7 +211,7 @@ def match_well():
             nuclei_mask_40x = read( nuclei_mask_40x_fname )
             # get the 10x nuclei mask 
             best_image_match_10x_tile = best_image_match_10x.split('/')[-1].split('-tile')[-1].replace('.tif','')
-            nuclei_10x_mask_fname = f'{results_dir_10x}/10X_{well_num}_Tile-{best_image_match_10x_tile}.nuclei.tif'
+            nuclei_10x_mask_fname = f'{nuclei_mask_dir_10x}/10X_{well_num}_Tile-{best_image_match_10x_tile}.nuclei.tif'
             if not os.path.exists( nuclei_10x_mask_fname ):
                 print( "missing 10x mask:", nuclei_10x_mask_fname )
                 continue
@@ -229,6 +237,7 @@ def match_well():
             phenotype_40x_fnames.append( phenotype_40x_fname ) 
             best_shifts.append( best_shift )
             files_40x_actually_used.append( file_40x )
+            best_cc_mags.append( best_cc_mag )
             tile_num_40x = get_field_num_from_phenix_name( file_40x )
             well_num_10x, tile_num_10x =  get_well_and_tile_num_from_fname_10x( best_image_match_10x )
             tile_origins_10x.append( sites_to_xy_10x[ tile_num_10x ] )
@@ -257,10 +266,6 @@ def match_well():
         for mapping_result in mapping_results:
             dict_all_40x_10x_match_data = mapping_result[0]
             for nucleus_40x in dict_all_40x_10x_match_data.keys():
-                #if not (int_10x > 8000 and int_40x > 800):
-                ##if not (int_10x > 15000 and int_40x > 1500):
-                #    all_intensities_10x.append( dict_all_40x_10x_match_data[ nucleus_40x ][ 'intensity_10x' ] )
-                #    all_intensities_40x.append( dict_all_40x_10x_match_data[ nucleus_40x ][ 'intensity_40x' ] )
                 all_intensities_10x.append( dict_all_40x_10x_match_data[ nucleus_40x ][ 'intensity_10x' ] )
                 all_intensities_40x.append( dict_all_40x_10x_match_data[ nucleus_40x ][ 'intensity_40x' ] )
                 all_dissim_10x.append( dict_all_40x_10x_match_data[ nucleus_40x ][ 'glcm_dissim_10x' ] )
@@ -271,43 +276,23 @@ def match_well():
         plt.savefig( f'all_dissim_compare_plate{plate_num}_well_{well_num}_{out_tag}.png' )
         plt.clf()
 
-        ## create model
-        #X_all_intensities_10x = np.array( all_intensities_10x )[:, np.newaxis]
-        #ransac = linear_model.RANSACRegressor()
-        #ransac.fit( X_all_intensities_10x, all_intensities_40x )
-        #print( ransac.estimator_.coef_ )
-        #line_X = np.arange( X_all_intensities_10x.min(), X_all_intensities_10x.max())[:, np.newaxis]
-        #line_y = ransac.predict( line_X )
-
-        #lr = linear_model.LinearRegression()
-        #lr.fit( X_all_intensities_10x, all_intensities_40x )
-        #line_y_lr = lr.predict( line_X )
-
-        #residuals = np.abs(np.array(all_intensities_40x) - ransac.predict( X_all_intensities_10x ))
-        #print( sorted( residuals ) )
-        #print( np.mean( residuals ), np.std( residuals ) )
-
         plt.subplots( 1,1,figsize=(5,5) )
         plt.scatter( all_intensities_10x, all_intensities_40x, alpha =0.1 )
-        #plt.scatter( all_intensities_10x, all_intensities_40x, alpha =0.1, c= residuals )
-        #plt.plot( line_X, line_y )
-        #plt.plot( line_X, line_y_lr )
         plt.savefig( f'all_intensities_compare_plate{plate_num}_well_{well_num}_{out_tag}.png' )
         plt.clf()
 
 
         # combine data
         # parallelize this data combination
-        #mapping_results_dfs = pool.starmap( combine_10x_40x_data, [(mapping_results[i][0],
         mapping_results_dfs = pool.starmap( combine_10x_40x_data_and_info, [(mapping_results[i][0],
             files_40x_actually_used[i],
             best_image_match_10xs[i],
+            best_cc_mags[i],
             full_df_10x_cells,
             full_df_nuclei) for i in range(len(mapping_results))] )
         for mapped_df in mapping_results_dfs:
             if len(mapped_df) > 0:
                 full_df_merged_data = full_df_merged_data.append( mapped_df )
-        
         
         full_df_merged_data.to_csv( 'all_output_data_plate_{plate_num}_well_{well_num}_{out_tag}.csv'.format(
             plate_num=plate_num, well_num=well_num, out_tag=out_tag), index=None )
@@ -316,4 +301,31 @@ def match_well():
 
 if __name__ == '__main__':
     multiprocessing.freeze_support()
-    match_well( )
+    parser = argparse.ArgumentParser( description="10x to 40x cell matching for a single well" )
+    parser.add_argument( '-plate_num', type=str, default="", help='plate number to analyze' )
+    parser.add_argument( '-well_num', type=str, default="", help='well number to analyze' )
+    parser.add_argument( '-out_tag', type=str, default="", help='output tag' )
+    parser.add_argument( '-num_proc', type=int, default="", help='number of processors to run on' )
+    parser.add_argument( '-list_dapi_files_40x', nargs='+', 
+        help="List of all the 40x dapi files to match")
+    parser.add_argument( '-data_file_10x', type=str, 
+        help="csv file with all 10x sbs data, e.g. 10X_B2_Tile-9.filtered_cells.csv or filtered_cells_combined.csv")
+    parser.add_argument( '-data_file_40x', type=str, 
+        help="csv file with all 40x phenotype data, e.g. phenotype_data_plate_10_well_B2_out_tag.csv" )
+    parser.add_argument( '-nd2_file_well_cycle_1', 
+        help='nd2 file for the first cycle of SBS for this well' )
+    parser.add_argument( '-match_file_dir', 
+        help='directory with all the match files for this plate/well' )
+    parser.add_argument( '-nuclei_mask_dir_40x', 
+        help='directory with all the 40x nuclei masks, e.g. nuclei_masks_plate_10_well_B2_out_tag/' )
+    parser.add_argument( '-nuclei_mask_dir_10x', 
+        help='directory with all the 10x nuclei masks, e.g. process_cellpose_nophenotype_all/' )
+    parser.add_argument( '-threshold_cc_match', type=float, default=0.30, 
+        help='threshold for 40x to 10x raw image match' )
+
+    args = parser.parse_args()
+    match_well( args.plate_num, args.well_num, args.out_tag, args.num_proc,
+                args.list_dapi_files_40x, args.data_file_10x, args.data_file_40x,
+                args.nd2_file_well_cycle_1, args.match_file_dir, args.nuclei_mask_dir_40x,
+                args.nuclei_mask_dir_10x, args.threshold_cc_match )
+
