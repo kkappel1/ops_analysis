@@ -104,64 +104,26 @@ def match_well( plate_num, well_num, out_tag, NUM_PROCESSES, list_of_files_40x,
                 data_file_10x, data_file_40x, nd2_file_well, match_file_dir, 
                 nuclei_mask_dir_40x, nuclei_mask_dir_10x,
                 THRESHOLD_CC_MATCH=0.30 ):
-
-    #NUM_PROCESSES = 1
-    #THRESHOLD_CC_MATCH = 0.30
-    #plate_num = 10
-    #well_num = 'B2'
-    #out_tag = 'test_match'
     
-#    # list of files that I want to match
-#    list_of_files_40x = [
-#    "phenotype_images/plate_10/well_B2/r02c02f110p01-ch1sk1fk1fl1.tiff",
-#    "phenotype_images/plate_10/well_B2/r02c02f111p01-ch1sk1fk1fl1.tiff",
-#    "phenotype_images/plate_10/well_B2/r02c02f112p01-ch1sk1fk1fl1.tiff",
-#    "phenotype_images/plate_10/well_B2/r02c02f113p01-ch1sk1fk1fl1.tiff"
-#    ]
-
-#    # load the df for the 10x cells that I want to match
-#    full_df_10x_cells = pd.read_csv( "process_cellpose_nophenotype_all/10X_B2_Tile-8.filtered_cells.csv")
-#    df_2 = pd.read_csv( "process_cellpose_nophenotype_all/10X_B2_Tile-9.filtered_cells.csv" )
-#    full_df_10x_cells = full_df_10x_cells.append( df_2 )
-
+    begin_time = datetime.datetime.now()
+    # load the df for the 10x cells
     full_df_10x_cells = pd.read_csv( data_file_10x )
     
     # load the df for the 40x cells
-#    full_df_nuclei = pd.read_csv('phenotype_data_plate_10_well_B2_test_script.csv' )
     full_df_nuclei = pd.read_csv( data_file_40x )
     
     
     # get xy coords from nd2 file
-#    plate_10_nd2_file = 'plate_10_nd2_file/WellB2_ChannelKK_SBS_DAPI,KK_SBS_Cy3,KK_SBS_A594,KK_SBS_Cy5,KK_SBS_Cy7,SBS_Cy7_s4,SBS_Cy5_s1,SBS_Cy5_s4_Seq0000.nd2'
-#    sites_to_xy_10x = map_10x_fields_to_xy_coords( plate_10_nd2_file )
     sites_to_xy_10x = map_10x_fields_to_xy_coords( nd2_file_well )
     
-    # match dir
-    #match_dir = 'match_all_plate_10_well_B2/'
-    
-    # need to get all the 40x nuclei masks
-    #nuclei_mask_dir_40x = 'nuclei_masks_plate_10_well_B2_test_script'
-    #dict_40x_nuclei_masks[ file_40x ]
-    
-    # need to get all the 10x nuclei masks
-    # can read from the .nuclei tif files
-    #results_dir_10x = 'process_cellpose_nophenotype_all/'
-
+    # for 10x files from RNAscope and 40x files from phenix
     pixel_size_10x = 0.841792491782224
     pixel_size_40x = 0.14949402023919043
 
-
-    ##############################
-    # STEP 3:
-    # do matching
-    ###############################
-    
-    begin_time = datetime.datetime.now()
     dict_file40x_to_10x_shift = {}
     # rename so merging will be possible later
     if 'tile' in full_df_10x_cells:
         full_df_10x_cells = full_df_10x_cells.rename(columns={"tile": "tile_10x"})
-    
     
     nuclei_masks_40x = []
     nuclei_masks_10x = []
@@ -182,7 +144,7 @@ def match_well( plate_num, well_num, out_tag, NUM_PROCESSES, list_of_files_40x,
     plot=True
     plot_phenotypes=False
     
-    
+
     with multiprocessing.Pool(processes=NUM_PROCESSES) as pool:
         full_df_merged_data = pd.DataFrame()
     
