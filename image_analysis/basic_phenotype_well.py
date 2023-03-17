@@ -93,11 +93,18 @@ def phenotype_well( plate_num, well_num, out_tag, tif_40x_base_dir, list_dapi_fi
                                 nuclei_smooth_value, area_min, plot_phenotype, area_max, 
                                 condensate_cutoff_intensity, THRESH_STDS, use_cellpose, 
                                 cellpose_diameter) for x in files_and_tiles])
+        nuclei_mask_outdir = f'nuclei_masks_plate_{plate_num}_well_{well_num}_{out_tag}'
+        if not os.path.exists( nuclei_mask_outdir ):
+            os.makedirs( nuclei_mask_outdir )
         for i, result in enumerate(phenotype_results):
             fname = files_and_tiles[i][0]
+            base_fname = fname.split('/')[-1].replace('.tiff','.tif')
             nuclei_mask = result[1]
             df_nuclei = result[0]
             dict_40x_nuclei_masks[fname] = nuclei_mask
+            # write the nuclei mask out
+            output_nuclei_mask_fname = f'{nuclei_mask_outdir}/nuclei_mask_{base_fname}'
+            save( output_nuclei_mask_fname, nuclei_mask )
             full_df_nuclei = full_df_nuclei.append( df_nuclei )
 
         # write the full_df_nuclei out to a file
