@@ -31,8 +31,11 @@ from cellpose.models import Cellpose
 
 
 
-pixel_size_40x = 0.1507
-pixel_size_10x = 0.844692184817898
+#pixel_size_40x = 0.1507
+#pixel_size_10x = 0.844692184817898
+#scale_factor = pixel_size_40x / pixel_size_10x
+pixel_size_10x = 0.841792491782224
+pixel_size_40x = 0.14949402023919043
 scale_factor = pixel_size_40x / pixel_size_10x
 
 def masked_register_translation_return_CC(
