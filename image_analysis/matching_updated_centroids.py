@@ -6,6 +6,7 @@ import multiprocessing
 from .SBS_analysis_functions_v221121 import *
 from scipy.stats import linregress
 matplotlib.use('Agg')
+from skimage.feature import greycomatrix, greycoprops
 
 def nd2_to_tif_rotate_180( input_filename, output_dir, ch_dapi, ch_G, ch_T, ch_A, ch_C ):
     with ND2Reader(input_filename) as images:
@@ -206,6 +207,552 @@ def get_best_10x_image_match_from_model( file_40x, files_10x_base_name, images_4
                 file_40x, files_likely_tiles_10x, scale_factor, output_dir=output_match_dir, overlap_ratio=overlap_ratio, plot=plot)
 
     return best_image_match, best_max_cc_mag, best_shift, final_shifted_40x_image
+
+
+def bin_array(arr, bin_size):
+    # Determine the number of bins
+    num_bins = int(np.ceil(arr.max() / bin_size))
+
+    # Create an array of bin edges
+    bin_edges = np.arange(num_bins + 1) * bin_size
+
+    # Use digitize to bin the values
+    binned = bin_edges[np.digitize(arr, bin_edges)]
+    if len( bin_edges ) > 1:
+        binned = binned - bin_edges[1]
+
+    return binned
+
+
+
+
+def map_40x_nuclei_to_10x_nuclei_centroid_dist_phenotype( nuclei_mask_40x, nuclei_mask_10x,
+                                                phenotype_40x_fname, phenotype_10x_fname,
+                                              tile_origin_10x, best_shift, pixel_size_10x,
+                                              pixel_size_40x, DIST_THRESH=15.0,
+                                               RATIO_MIN_TO_NEXT_THRESH=0.9,
+                                               plot_tag='test_2',
+                                              plot=False, plot_phenotypes=False):
+    
+    # load the phenotype images
+    phenotype_img_40x = read( phenotype_40x_fname )
+    phenotype_img_10x = read( phenotype_10x_fname )
+    # get just the gfp channel of the 10x phenotype image
+    gfp_channel_10x_phenotype = 1
+    phenotype_img_10x = phenotype_img_10x[gfp_channel_10x_phenotype,:]
+
+    scale_factor = pixel_size_40x / pixel_size_10x
+    scale16to8 = np.power(2,8) / np.power(2,16)
+
+    # want to be able to normalize the GFP intensities in each image
+    # ideally I would have some global normalization factor per well
+
+    # get the 10x centroids
+    image_size_10x = np.shape( nuclei_mask_10x )[0]
+    image_size_40x = np.shape( nuclei_mask_40x )[0]
+    
+    cells_to_phenotype_10x = {}
+    cells_to_centroids_10x = {}
+    dict_10x_label_to_pheno_img = {}
+    cells_to_intensity_10x = {}
+    for cell in skimage.measure.regionprops(nuclei_mask_10x, phenotype_img_10x):
+        centroid = cell.centroid
+        # get the centroid in actual x y positions
+        x = tile_origin_10x[0] + centroid[1] * pixel_size_10x
+        y = tile_origin_10x[1] + (image_size_10x-centroid[0])* pixel_size_10x
+        cells_to_centroids_10x[ cell.label ] = [x, y]
+
+
+        # get the mean gfp intensity of the cell
+        mean_intensity = cell.mean_intensity
+
+        # get the texture of the cell
+        scaled_intensity_image = skimage.img_as_ubyte( cell.intensity_image )
+        glcm = greycomatrix( scaled_intensity_image, distances=[5], angles=[0], levels=256,
+            symmetric=True, normed=True )
+        glcm_dissim = greycoprops( glcm, 'dissimilarity')[0,0]
+        cells_to_phenotype_10x[ cell.label ] = [mean_intensity, glcm_dissim]
+        dict_10x_label_to_pheno_img[ cell.label ] = cell.intensity_image
+        cells_to_intensity_10x[ cell.label ] = [mean_intensity]
+
+
+    # get the 40x centroids
+    shift_x = best_shift[0]
+    shift_y = best_shift[1]
+
+    nucleii_to_centroids_40x = {}
+    cells_to_phenotype_40x = {}
+    dict_40x_label_to_pheno_img = {}
+    cells_to_intensity_40x = {}
+    for nucleus in skimage.measure.regionprops(nuclei_mask_40x, phenotype_img_40x):
+        centroid = nucleus.centroid
+        tile_origin_40x_x = tile_origin_10x[0] + shift_y*pixel_size_10x
+        tile_origin_40x_y = tile_origin_10x[1] + (image_size_10x-shift_x)*pixel_size_10x - (image_size_40x*pixel_size_40x)
+        
+        centroid_x = tile_origin_40x_x + centroid[1]*pixel_size_40x
+        centroid_y = tile_origin_40x_y + (image_size_40x - centroid[0])*pixel_size_40x
+
+        nucleii_to_centroids_40x[nucleus.label] = [centroid_x, centroid_y]
+
+        # get the mean gfp intensity of the cell
+        mean_intensity = nucleus.mean_intensity
+
+        # GLCM dissimilarity calculation
+        # rescale the intensity image to match 10x size
+        rescaled_intensity_image = skimage.transform.rescale( nucleus.intensity_image,
+                                                    scale_factor, anti_aliasing=False, 
+                                                    multichannel=False, preserve_range=True)
+        rescaled_intensity_image = rescaled_intensity_image.astype( nucleus.intensity_image.dtype )
+        scaled_intensity_image = rescaled_intensity_image * scale16to8
+        scaled_intensity_image = np.round( scaled_intensity_image )
+        scaled_intensity_image = scaled_intensity_image.astype( "uint8" )
+
+        glcm = greycomatrix( scaled_intensity_image, distances=[5], angles=[0], levels=256,
+            symmetric=True, normed=True )
+        glcm_dissim = greycoprops( glcm, 'dissimilarity')[0,0]
+        cells_to_phenotype_40x[ nucleus.label ] = [mean_intensity, glcm_dissim]
+        dict_40x_label_to_pheno_img[ nucleus.label ] = nucleus.intensity_image
+        cells_to_intensity_40x[ nucleus.label ] = [mean_intensity]
+
+        
+    dict_40x_nuclei_to_10x_nuclei = {}
+    if (len(nucleii_to_centroids_40x) < 1) or (len(cells_to_centroids_10x) < 1):
+        return dict_40x_nuclei_to_10x_nuclei, 0, 0.0, 0
+        
+    df_10x_centroids = pd.DataFrame.from_dict( cells_to_centroids_10x, orient='index')
+    df_40x_centroids = pd.DataFrame.from_dict( nucleii_to_centroids_40x, orient='index')
+
+    df_10x_intensity = pd.DataFrame.from_dict( cells_to_intensity_10x, orient='index' )
+    df_40x_intensity = pd.DataFrame.from_dict( cells_to_intensity_40x, orient='index' )
+
+    distances = cdist( df_40x_centroids[[0,1]].values, 
+                     df_10x_centroids[[0,1]].values)
+    # get the intensity differences 
+    distances_intensity = np.subtract.outer( df_40x_intensity[0].values,
+                        df_10x_intensity[0].values )
+    distances_intensity = np.abs( distances_intensity )
+
+    # bin the intensity distances
+    bin_size = 500
+    binned_distances_intensity = bin_array( distances_intensity, bin_size )
+
+    index_min = distances.argmin( axis=1 )
+
+    dict_40x_to_dist_metrics = {}
+    dict_all_40x_10x_match_data = {}
+    ########################
+    # matching - save phenotype params but do not use here
+    ########################
+    # loop through the nuclei and see whether they can be matched
+    for nuclei_index_40x in range( len( df_40x_centroids)):
+        nucleus_label_40x = df_40x_centroids.iloc[ [nuclei_index_40x] ].index[0]
+        # distances from this 40x nucleus to all 10x nuclei
+        distances_nucleus = distances[nuclei_index_40x]
+        # the minimum distance to a 10x nucleus and its index
+        index_min = distances_nucleus.argmin()
+        # which 40x nucleus is min dist from this 10x nucleus?
+        index_min_10x_to_40x = distances.T[index_min].argmin()
+        if index_min_10x_to_40x != nuclei_index_40x:
+            # then this nucleus cannot be matched
+            dict_40x_nuclei_to_10x_nuclei[ nucleus_label_40x ] = 0
+            continue
+        match_nucleus_label_10x = df_10x_centroids.iloc[[index_min]].index[0]    
+        min_dist = distances_nucleus[ index_min ]
+        # then find the next smallest distance to a 10x nucleus
+        sorted_distances = sorted( distances_nucleus )
+        second_min_dist = sorted_distances[1]
+        ratio_min_to_next = min_dist / second_min_dist
+        if (min_dist < DIST_THRESH) and (ratio_min_to_next < RATIO_MIN_TO_NEXT_THRESH):
+            # then this is a match!
+            dict_40x_nuclei_to_10x_nuclei[ nucleus_label_40x ] = match_nucleus_label_10x
+            dict_40x_to_dist_metrics[ nucleus_label_40x ] = [min_dist, second_min_dist]
+            nucleus_info = {'nucleus_10x': match_nucleus_label_10x,
+                            'min_dist': min_dist,
+                            'second_min_dist': second_min_dist,
+                            'intensity_10x': cells_to_phenotype_10x[ match_nucleus_label_10x ][0],
+                            'intensity_40x': cells_to_phenotype_40x[ nucleus_label_40x][0],
+                            'glcm_dissim_10x': cells_to_phenotype_10x[ match_nucleus_label_10x ][1],
+                            'glcm_dissim_40x': cells_to_phenotype_40x[nucleus_label_40x][1],
+                            'match_10x_centroid': cells_to_centroids_10x[ match_nucleus_label_10x],
+                            'match_40x_centroid': nucleii_to_centroids_40x[ nucleus_label_40x],}
+            dict_all_40x_10x_match_data[ nucleus_label_40x ] = nucleus_info
+
+        else:
+            dict_40x_nuclei_to_10x_nuclei[ nucleus_label_40x ] = 0
+        # resolve any 40x nuclei that have been matched to the same 10x nuclei
+        # (shouldn't actually need to do that if I'm checking that it's the min dist from 10x to 40x and 40x to 10x)
+        
+
+    # plot the phenotype images for all the cell matches, if requested
+    if plot_phenotypes:
+        num_rows = len(dict_40x_nuclei_to_10x_nuclei.values()) - list(dict_40x_nuclei_to_10x_nuclei.values()).count(0)
+        print( "num matched", num_rows )
+        fig, ax = plt.subplots(num_rows,2,
+                figsize=(2,num_rows))
+    
+        plt_index = 0
+        for label_40x in dict_40x_nuclei_to_10x_nuclei.keys():
+            label_10x = dict_40x_nuclei_to_10x_nuclei[ label_40x ]
+            # this means the cell was not matched
+            if label_10x == 0: 
+                continue
+            img_10x = dict_10x_label_to_pheno_img[ label_10x ]
+            img_40x = dict_40x_label_to_pheno_img[ label_40x ]    
+            ax[plt_index][0].imshow( img_10x, interpolation='none', vmin=50, vmax=18000, cmap='gray' )
+            ax[plt_index][1].imshow( img_40x, interpolation='none', vmin=50, vmax=3000, cmap='gray' )
+            ax[plt_index][1].set_title( '%0.2f, %0.2f\n%0.2f, %0.2f' %(cells_to_phenotype_40x[ label_40x ][0], 
+                                                            cells_to_phenotype_40x[ label_40x ][1],
+                                                            dict_40x_to_dist_metrics[label_40x][0],
+                                                            dict_40x_to_dist_metrics[label_40x][1]), fontsize=2 )
+            ax[plt_index][0].set_title( '%0.2f, %0.2f' %(cells_to_phenotype_10x[ label_10x ][0],
+                                                            cells_to_phenotype_10x[ label_10x ][1],
+                                                            ), fontsize=2 )
+            ax[plt_index][0].set_axis_off()
+            ax[plt_index][1].set_axis_off()
+            plt_index += 1
+        plt.savefig( f"phenotype_image_matches_{plot_tag}.pdf" )
+        plt.clf()
+        
+    num_matched_nuclei = sum([x>0 for x in dict_40x_nuclei_to_10x_nuclei.values()])
+    matched_nuclei = [x for x in dict_40x_nuclei_to_10x_nuclei.values() if x>0]
+    frac_matched_nuclei = num_matched_nuclei/len(df_40x_centroids)
+    duplicated_10x_nuclei = len(matched_nuclei) - len(set(matched_nuclei))
+
+    if plot:
+        # plot the matched nuclei
+        plt.subplots(1,1,figsize=(20, 20))
+        plt.scatter( df_10x_centroids[[0]].values, df_10x_centroids[[1]].values)
+        plt.scatter( df_40x_centroids[[0]].values, df_40x_centroids[[1]].values)
+        for mindex, matched_nuc_40x in enumerate(dict_40x_nuclei_to_10x_nuclei.keys()):
+            if dict_40x_nuclei_to_10x_nuclei[matched_nuc_40x] == 0: 
+                # this cell was not matched
+                continue
+            centroid_40x = nucleii_to_centroids_40x[matched_nuc_40x]
+            centroid_10x = cells_to_centroids_10x[ dict_40x_nuclei_to_10x_nuclei[matched_nuc_40x]]
+
+            plt.scatter( [centroid_10x[0], centroid_40x[0]], [centroid_10x[1],centroid_40x[1]] )
+            plt.text( centroid_10x[0], centroid_10x[1], mindex )
+            plt.text( centroid_40x[0], centroid_40x[1], mindex )
+        plt.savefig( "overlay_matches_centroid_{plot_tag}.pdf".format(plot_tag=plot_tag) )
+        plt.clf()
+        
+    return dict_all_40x_10x_match_data, num_matched_nuclei, frac_matched_nuclei, duplicated_10x_nuclei
+    #return dict_40x_nuclei_to_10x_nuclei, num_matched_nuclei, frac_matched_nuclei, duplicated_10x_nuclei
+
+
+
+def SCRATCH_map_40x_nuclei_to_10x_nuclei_centroid_dist_phenotype( nuclei_mask_40x, nuclei_mask_10x,
+                                                phenotype_40x_fname, phenotype_10x_fname,
+                                                gfp_int_scale_factor, mean_int_percentiles_10x,
+                                                mean_int_percentiles_40x,
+                                              tile_origin_10x, best_shift, pixel_size_10x,
+                                              pixel_size_40x, DIST_THRESH=15.0,
+                                               RATIO_MIN_TO_NEXT_THRESH=0.9,
+                                               plot_tag='test_2',
+                                              plot=False):
+    
+    # load the phenotype images
+    phenotype_img_40x = read( phenotype_40x_fname )
+    phenotype_img_10x = read( phenotype_10x_fname )
+    # get just the gfp channel of the 10x phenotype image
+    gfp_channel_10x_phenotype = 1
+    phenotype_img_10x = phenotype_img_10x[gfp_channel_10x_phenotype,:]
+    #print( "full shape", phenotype_img_10x.shape ) 
+    #print( "1 shape", phenotype_img_10x[1,:].shape )
+    #save( f'test_{plot_tag}_gfp.tif', phenotype_img_10x[1,:] )
+    scale_factor = pixel_size_40x / pixel_size_10x
+
+    # want to be able to normalize the GFP intensities in each image
+    # ideally I would have some global normalization factor per well
+
+    # get the 10x centroids
+    image_size_10x = np.shape( nuclei_mask_10x )[0]
+    image_size_40x = np.shape( nuclei_mask_40x )[0]
+    
+    cells_to_phenotype_10x = {}
+    cells_to_centroids_10x = {}
+    dict_10x_label_to_pheno_img = {}
+    cells_to_intensity_10x = {}
+    for cell in skimage.measure.regionprops(nuclei_mask_10x, phenotype_img_10x):
+        centroid = cell.centroid
+        # get the centroid in actual x y positions
+        x = tile_origin_10x[0] + centroid[1] * pixel_size_10x
+        y = tile_origin_10x[1] + (image_size_10x-centroid[0])* pixel_size_10x
+        cells_to_centroids_10x[ cell.label ] = [x, y]
+        # get the mean gfp intensity of the cell
+        mean_intensity = cell.mean_intensity
+
+        # get the texture of the cell
+        #save( 'test_cell.tif', cell.intensity_image )
+        scaled_intensity_image = skimage.img_as_ubyte( cell.intensity_image )
+        glcm = greycomatrix( scaled_intensity_image, distances=[5], angles=[0], levels=256,
+            symmetric=True, normed=True )
+        glcm_dissim = greycoprops( glcm, 'dissimilarity')[0,0]
+        glcm_corr = greycoprops( glcm, 'correlation')[0,0]
+        intensity_percentile = np.digitize( mean_intensity, mean_int_percentiles_10x)
+        #cells_to_phenotype_10x[ cell.label ] = [intensity_percentile, glcm_dissim, glcm_corr]
+        cells_to_phenotype_10x[ cell.label ] = [mean_intensity, glcm_dissim, glcm_corr]
+        dict_10x_label_to_pheno_img[ cell.label ] = cell.intensity_image
+        cells_to_intensity_10x[ cell.label ] = [mean_intensity]
+
+
+    ##for nucleus_index, label_10x in enumerate(properties_10x['label']):
+    #for nucleus_index in range( len(properties_10x['label'])):
+    #    label_10x = properties_10x['label'][nucleus_index]
+    #    dict_10x_label_to_pheno_img[ label_10x ] = properties_10x['intensity_image'][nucleus_index]
+    #for nucleus_index, label_40x in enumerate(properties_40x['label']):
+    #    dict_40x_label_to_pheno_img[ label_40x ] = properties_40x['intensity_image'][nucleus_index]
+        
+        
+    # get the 40x centroids
+    shift_x = best_shift[0]
+    shift_y = best_shift[1]
+
+    scale16to8 = np.power(2,8) / np.power(2,16)
+    
+    nucleii_to_centroids_40x = {}
+    cells_to_phenotype_40x = {}
+    dict_40x_label_to_pheno_img = {}
+    cells_to_intensity_40x = {}
+    for nucleus in skimage.measure.regionprops(nuclei_mask_40x, phenotype_img_40x):
+        centroid = nucleus.centroid
+        tile_origin_40x_x = tile_origin_10x[0] + shift_y*pixel_size_10x
+        tile_origin_40x_y = tile_origin_10x[1] + (image_size_10x-shift_x)*pixel_size_10x - (image_size_40x*pixel_size_40x)
+        
+        centroid_x = tile_origin_40x_x + centroid[1]*pixel_size_40x
+        centroid_y = tile_origin_40x_y + (image_size_40x - centroid[0])*pixel_size_40x
+
+        nucleii_to_centroids_40x[nucleus.label] = [centroid_x, centroid_y]
+
+        # get the mean gfp intensity of the cell
+        mean_intensity = nucleus.mean_intensity
+
+        #print( nucleus.intensity_image.dtype )
+        # rescale the intensity image to match 10x size
+        rescaled_intensity_image = skimage.transform.rescale( nucleus.intensity_image,
+                                                    scale_factor, anti_aliasing=False, 
+                                                    multichannel=False, preserve_range=True)
+        rescaled_intensity_image = rescaled_intensity_image.astype( nucleus.intensity_image.dtype )
+        #print( rescaled_intensity_image.dtype )
+        #save( 'test_cell_40x.tif', rescaled_intensity_image )
+        #scaled_intensity_image = skimage.img_as_ubyte( rescaled_intensity_image )
+        scaled_intensity_image = rescaled_intensity_image * scale16to8
+        #print( scaled_intensity_image )
+        scaled_intensity_image = np.round( scaled_intensity_image )
+        scaled_intensity_image = scaled_intensity_image.astype( "uint8" )
+        #print( scaled_intensity_image )
+        #save( 'test_cell_40x_scaled.tif', scaled_intensity_image )
+        glcm = greycomatrix( scaled_intensity_image, distances=[5], angles=[0], levels=256,
+            symmetric=True, normed=True )
+        glcm_dissim = greycoprops( glcm, 'dissimilarity')[0,0]
+        glcm_corr = greycoprops( glcm, 'correlation')[0,0]
+        intensity_percentile = np.digitize( mean_intensity, mean_int_percentiles_40x)
+        #cells_to_phenotype_40x[ nucleus.label ] = [intensity_percentile, glcm_dissim, glcm_corr]
+        cells_to_phenotype_40x[ nucleus.label ] = [mean_intensity, glcm_dissim, glcm_corr]
+        dict_40x_label_to_pheno_img[ nucleus.label ] = nucleus.intensity_image
+        cells_to_intensity_40x[ nucleus.label ] = [mean_intensity * gfp_int_scale_factor]
+
+        
+    dict_40x_nuclei_to_10x_nuclei = {}
+    if (len(nucleii_to_centroids_40x) < 1) or (len(cells_to_centroids_10x) < 1):
+        return dict_40x_nuclei_to_10x_nuclei, 0, 0.0, 0
+        
+    df_10x_centroids = pd.DataFrame.from_dict( cells_to_centroids_10x, orient='index')
+    df_40x_centroids = pd.DataFrame.from_dict( nucleii_to_centroids_40x, orient='index')
+
+    df_10x_intensity = pd.DataFrame.from_dict( cells_to_intensity_10x, orient='index' )
+    df_40x_intensity = pd.DataFrame.from_dict( cells_to_intensity_40x, orient='index' )
+
+    distances = cdist( df_40x_centroids[[0,1]].values, 
+                     df_10x_centroids[[0,1]].values)
+    # get the intensity differences 
+    distances_intensity = np.subtract.outer( df_40x_intensity[0].values,
+                        df_10x_intensity[0].values )
+    distances_intensity = np.abs( distances_intensity )
+
+    # bin the intensity distances
+    bin_size = 500
+    binned_distances_intensity = bin_array( distances_intensity, bin_size )
+
+    #print( binned_distances_intensity )
+    #print( distances.shape, binned_distances_intensity.shape )
+    # can now combine the distances and intensity differences into a single metric
+    # that I can use for performing matching
+
+    #print( distances_intensity ) 
+    #print( binned_distances_intensity )
+
+    index_min = distances.argmin( axis=1 )
+
+    #DIST_THRESH = 15.0
+    # may want to make this ratio distance dependent?
+    #RATIO_MIN_TO_NEXT_THRESH = 0.9
+
+    ints_10x = []
+    ints_40x = []
+
+    dict_40x_to_dist_metrics = {}
+    #######
+    # old way of computing matches, comment out while taking phenotype into account
+    #######
+#    # loop through the nuclei and see whether they can be matched
+#    for nuclei_index_40x in range( len( df_40x_centroids)):
+#        nucleus_label_40x = df_40x_centroids.iloc[ [nuclei_index_40x] ].index[0]
+#        # distances from this 40x nucleus to all 10x nuclei
+#        distances_nucleus = distances[nuclei_index_40x]
+#        # the minimum distance to a 10x nucleus and its index
+#        index_min = distances_nucleus.argmin()
+#        # which 40x nucleus is min dist from this 10x nucleus?
+#        index_min_10x_to_40x = distances.T[index_min].argmin()
+#        if index_min_10x_to_40x != nuclei_index_40x:
+#            # then this nucleus cannot be matched
+#            dict_40x_nuclei_to_10x_nuclei[ nucleus_label_40x ] = 0
+#            continue
+#        match_nucleus_label_10x = df_10x_centroids.iloc[[index_min]].index[0]    
+#        min_dist = distances_nucleus[ index_min ]
+#        # then find the next smallest distance to a 10x nucleus
+#        sorted_distances = sorted( distances_nucleus )
+#        second_min_dist = sorted_distances[1]
+#        ratio_min_to_next = min_dist / second_min_dist
+#        if (min_dist < DIST_THRESH) and (ratio_min_to_next < RATIO_MIN_TO_NEXT_THRESH):
+#            # then this is a match!
+#            # not checking here if this 10x nucleus had already been matched
+#            # will need to resolve any double matches after
+#            dict_40x_nuclei_to_10x_nuclei[ nucleus_label_40x ] = match_nucleus_label_10x
+#            #print( cells_to_phenotype_10x[ match_nucleus_label_10x], 
+#            #    cells_to_phenotype_40x[ nucleus_label_40x ] )
+#            ints_10x.append( cells_to_phenotype_10x[ match_nucleus_label_10x][0] )
+#            ints_40x.append( cells_to_phenotype_40x[ nucleus_label_40x ][0] )
+#            #ints_40x.append( cells_to_phenotype_40x[ nucleus_label_40x ] * gfp_int_scale_factor )
+#            dict_40x_to_dist_metrics[ nucleus_label_40x ] = [min_dist, second_min_dist]
+#
+#            # check if this 10x nucleus had already been matched
+#            # if so, check whether the distance for that match is less than the distance for this match
+#        else:
+#            dict_40x_nuclei_to_10x_nuclei[ nucleus_label_40x ] = 0
+#        # resolve any 40x nuclei that have been matched to the same 10x nuclei
+#        # (shouldn't actually need to do that if I'm checking that it's the min dist from 10x to 40x and 40x to 10x)
+
+
+    ########################
+    # matching taking phenotype params into account
+    ########################
+    # loop through the nuclei and see whether they can be matched
+    for nuclei_index_40x in range( len( df_40x_centroids)):
+        nucleus_label_40x = df_40x_centroids.iloc[ [nuclei_index_40x] ].index[0]
+        # distances from this 40x nucleus to all 10x nuclei
+        distances_nucleus = distances[nuclei_index_40x]
+        # intensity distances from this 40x nucleus to all 10x nuclei
+        intensity_distances_nucleus = binned_distances_intensity[nuclei_index_40x]
+        # the minimum distance to a 10x nucleus and its index
+        index_min = distances_nucleus.argmin()
+        # which 40x nucleus is min dist from this 10x nucleus?
+        index_min_10x_to_40x = distances.T[index_min].argmin()
+        if index_min_10x_to_40x != nuclei_index_40x:
+            # then this nucleus cannot be matched
+            dict_40x_nuclei_to_10x_nuclei[ nucleus_label_40x ] = 0
+            continue
+        match_nucleus_label_10x = df_10x_centroids.iloc[[index_min]].index[0]    
+        min_dist = distances_nucleus[ index_min ]
+        # then find the next smallest distance to a 10x nucleus
+        sorted_distances = sorted( distances_nucleus )
+        second_min_dist = sorted_distances[1]
+        ratio_min_to_next = min_dist / second_min_dist
+        if (min_dist < DIST_THRESH) and (ratio_min_to_next < RATIO_MIN_TO_NEXT_THRESH):
+            # then this is a match!
+            # not checking here if this 10x nucleus had already been matched
+            # will need to resolve any double matches after
+            dict_40x_nuclei_to_10x_nuclei[ nucleus_label_40x ] = match_nucleus_label_10x
+            #print( cells_to_phenotype_10x[ match_nucleus_label_10x], 
+            #    cells_to_phenotype_40x[ nucleus_label_40x ] )
+            ints_10x.append( cells_to_phenotype_10x[ match_nucleus_label_10x][0] )
+            ints_40x.append( cells_to_phenotype_40x[ nucleus_label_40x ][0] )
+            #ints_40x.append( cells_to_phenotype_40x[ nucleus_label_40x ] * gfp_int_scale_factor )
+            dict_40x_to_dist_metrics[ nucleus_label_40x ] = [min_dist, second_min_dist]
+
+            # check if this 10x nucleus had already been matched
+            # if so, check whether the distance for that match is less than the distance for this match
+        else:
+            dict_40x_nuclei_to_10x_nuclei[ nucleus_label_40x ] = 0
+        # resolve any 40x nuclei that have been matched to the same 10x nuclei
+        
+
+
+
+
+
+    # plot the phenotype images for all the cell matches
+
+    num_rows = len(dict_40x_nuclei_to_10x_nuclei.values()) - list(dict_40x_nuclei_to_10x_nuclei.values()).count(0)
+    print( "num matched", num_rows )
+    fig, ax = plt.subplots(num_rows,2,
+            figsize=(2,num_rows))
+
+    plt_index = 0
+    for label_40x in dict_40x_nuclei_to_10x_nuclei.keys():
+        label_10x = dict_40x_nuclei_to_10x_nuclei[ label_40x ]
+        # this means the cell was not matched
+        if label_10x == 0: 
+            continue
+        img_10x = dict_10x_label_to_pheno_img[ label_10x ]
+        img_40x = dict_40x_label_to_pheno_img[ label_40x ]    
+        ax[plt_index][0].imshow( img_10x, interpolation='none', vmin=50, vmax=18000, cmap='gray' )
+        ax[plt_index][1].imshow( img_40x, interpolation='none', vmin=50, vmax=3000, cmap='gray' )
+        ax[plt_index][1].set_title( '%0.2f, %0.2f, %0.2f\n%0.2f, %0.2f' %(cells_to_phenotype_40x[ label_40x ][0], 
+                                                        cells_to_phenotype_40x[ label_40x ][1],
+                                                        cells_to_phenotype_40x[ label_40x ][2],
+                                                        dict_40x_to_dist_metrics[label_40x][0],
+                                                        dict_40x_to_dist_metrics[label_40x][1]), fontsize=2 )
+        ax[plt_index][0].set_title( '%0.2f, %0.2f, %0.2f' %(cells_to_phenotype_10x[ label_10x ][0],
+                                                        cells_to_phenotype_10x[ label_10x ][1],
+                                                        cells_to_phenotype_10x[ label_10x ][2],), fontsize=2 )
+        ax[plt_index][0].set_axis_off()
+        ax[plt_index][1].set_axis_off()
+        plt_index += 1
+    plt.savefig( f"phenotype_image_matches_{plot_tag}.pdf" )
+    plt.clf()
+        
+    
+
+    plt.subplots(1,1,figsize=(5,5) )
+    model = linregress(ints_10x, ints_40x ) 
+    print( plot_tag, "slope", model.slope, "intercept", model.intercept )
+    xs = np.arange( 0, max(ints_10x ) )
+    ys = model.slope * xs + model.intercept
+    plt.scatter( ints_10x, ints_40x, alpha=0.1 )
+    print( plot_tag, ints_10x )
+    print( plot_tag, ints_40x )
+    #plt.plot( xs, ys )
+    plt.savefig( f'test_compare_int_{plot_tag}.pdf' )
+    plt.clf()
+    num_matched_nuclei = sum([x>0 for x in dict_40x_nuclei_to_10x_nuclei.values()])
+    matched_nuclei = [x for x in dict_40x_nuclei_to_10x_nuclei.values() if x>0]
+    frac_matched_nuclei = num_matched_nuclei/len(df_40x_centroids)
+    duplicated_10x_nuclei = len(matched_nuclei) - len(set(matched_nuclei))
+    #print( "Num matched nuclei:", num_matched_nuclei)
+    #print( "Fraction matched nuclei:", num_matched_nuclei/len(df_40x_centroids))
+    #print( "duplicated 10x nuclei:", len(matched_nuclei) - len(set(matched_nuclei)))
+    if plot:
+        # plot the matched nuclei
+        plt.subplots(1,1,figsize=(20, 20))
+        plt.scatter( df_10x_centroids[[0]].values, df_10x_centroids[[1]].values)
+        plt.scatter( df_40x_centroids[[0]].values, df_40x_centroids[[1]].values)
+        for mindex, matched_nuc_40x in enumerate(dict_40x_nuclei_to_10x_nuclei.keys()):
+            if dict_40x_nuclei_to_10x_nuclei[matched_nuc_40x] == 0: 
+                # this cell was not matched
+                continue
+            centroid_40x = nucleii_to_centroids_40x[matched_nuc_40x]
+            centroid_10x = cells_to_centroids_10x[ dict_40x_nuclei_to_10x_nuclei[matched_nuc_40x]]
+
+            plt.scatter( [centroid_10x[0], centroid_40x[0]], [centroid_10x[1],centroid_40x[1]] )
+            plt.text( centroid_10x[0], centroid_10x[1], mindex )
+            plt.text( centroid_40x[0], centroid_40x[1], mindex )
+        plt.savefig( "overlay_matches_centroid_{plot_tag}.pdf".format(plot_tag=plot_tag) )
+        plt.clf()
+        #plt.show()
+        
+    return dict_40x_nuclei_to_10x_nuclei, num_matched_nuclei, frac_matched_nuclei, duplicated_10x_nuclei, ints_10x, ints_40x
+
 
 
 def map_40x_nuclei_to_10x_nuclei_centroid_dist( nuclei_mask_40x, nuclei_mask_10x,
