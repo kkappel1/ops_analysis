@@ -162,7 +162,7 @@ def fit_linear_40x_to_10x_from_brute_force_matches( brute_force_match_dir,
     return ransac
 
 def get_10x_coords_from_40x_coords( x40x, y40x, linregress_model ):
-    pred = linregress_model.predict( np.array([[x10x, y10x]] ) )
+    pred = linregress_model.predict( np.array([[x40x, y40x]] ) )
     x10x = pred[0][0]
     y10x = pred[0][1]
     return x10x, y10x
