@@ -7,6 +7,7 @@ from .SBS_analysis_functions_v221121 import *
 from scipy.stats import linregress
 matplotlib.use('Agg')
 from skimage.feature import greycomatrix, greycoprops
+from sklearn import linear_model
 
 def nd2_to_tif_rotate_180( input_filename, output_dir, ch_dapi, ch_G, ch_T, ch_A, ch_C ):
     with ND2Reader(input_filename) as images:
@@ -120,29 +121,50 @@ def fit_linear_40x_to_10x_from_brute_force_matches( brute_force_match_dir,
         fbase = match_file_base.split('/')[-1].replace('.txt', '.tiff').replace('match_','')
         unique_file_name += fbase[0:6] + '_'
         break
+
+    # fit a model
+    linregress_x = linregress( x40x_for_fitting, x10x_for_fitting )
+    linregress_y = linregress( y40x_for_fitting, y10x_for_fitting )
+
+    #ransac_x = linear_model.RANSACRegressor()
+    #ransac_x.fit( np.array( x40x_for_fitting )[:, np.newaxis], 
+    #ransac.
+
+    X = np.array([ [x40x_for_fitting[i], y40x_for_fitting[i]] for i in range(len(x40x_for_fitting))  ])
+    y = np.array([ [x10x_for_fitting[i], y10x_for_fitting[i]] for i in range(len(x10x_for_fitting))  ])
+    ransac = linear_model.RANSACRegressor(residual_threshold=10.)
+    ransac.fit( X, y )
+
     if plot:
+        xs = np.array( [min(x40x_for_fitting), max(x40x_for_fitting)] )
+        ys = np.array( [min(y40x_for_fitting), max(y40x_for_fitting) ])
+        xys = np.array( [[min(x40x_for_fitting), min(y40x_for_fitting)],
+                    [max(x40x_for_fitting), max(y40x_for_fitting)]] )
+        pred_xys = ransac.predict( xys )
         fig, ax = plt.subplots( 1,1,figsize=(5,5))
-        ax.scatter( y10x_for_fitting, y40x_for_fitting, alpha=0.3, c=np.arange(len(y10x_for_fitting)), cmap='plasma')
-        #plt.savefig( 'fitting_y_10x_vs_40x.png' )
+        ax.scatter( y40x_for_fitting, y10x_for_fitting, alpha=0.3, c=np.arange(len(y10x_for_fitting)), cmap='plasma')
+        #ax.scatter( y10x_for_fitting, y40x_for_fitting, alpha=0.3, c=np.arange(len(y10x_for_fitting)), cmap='plasma')
+        ax.plot( ys, linregress_y.slope * ys + linregress_y.intercept )
+        ax.plot( xys[:,1], pred_xys[:,1] )
         # save with unique file name 
         plt.savefig( brute_force_match_dir + '/images/' + unique_file_name + 'y_10x_vs_40x.png' )
         plt.clf()
         
         fig, ax = plt.subplots( 1,1,figsize=(5,5))
-        ax.scatter( x10x_for_fitting, x40x_for_fitting, alpha=0.3, c=np.arange(len(y10x_for_fitting)), cmap='plasma')
-        #plt.savefig( 'fitting_x_10x_vs_40x.png' )
+        ax.plot( xs, linregress_x.slope * xs + linregress_x.intercept )
+        ax.plot( xys[:,0], pred_xys[:,0] )
+        ax.scatter( x40x_for_fitting, x10x_for_fitting, alpha=0.3, c=np.arange(len(y10x_for_fitting)), cmap='plasma')
         plt.savefig( brute_force_match_dir + '/images/' + unique_file_name + 'x_10x_vs_40x.png' )
         plt.clf()
     
-    # fit a model
-    linregress_x = linregress( x40x_for_fitting, x10x_for_fitting )
-    linregress_y = linregress( y40x_for_fitting, y10x_for_fitting )
 
-    return linregress_x, linregress_y
+    #return linregress_x, linregress_y
+    return ransac
 
-def get_10x_coords_from_40x_coords( x40x, y40x, linregress_x, linregress_y ):
-    x10x = linregress_x.slope*x40x + linregress_x.intercept
-    y10x = linregress_y.slope*y40x + linregress_y.intercept
+def get_10x_coords_from_40x_coords( x40x, y40x, linregress_model ):
+    pred = linregress_model.predict( np.array([[x10x, y10x]] ) )
+    x10x = pred[0][0]
+    y10x = pred[0][1]
     return x10x, y10x
 
 def get_field_num_from_phenix_name( name ):
@@ -176,7 +198,7 @@ def get_10x_tiles_from_coords(x10x, y10x, sites_to_xy_10x, tile_size_10x_x, tile
 
 # files_10x_base_name should be something like "/Volumes/Extreme SSD/20221026_SBS_plate_1_tiffs/well_B3/cycle_1/WellB3_ChannelSBS_DAPI,SBS_Cy3,SBS_A594,SBS_Cy5,SBS_Cy7_Seq0000-"
 def get_best_10x_image_match_from_model( file_40x, files_10x_base_name, images_40x_to_xy, sites_to_xy_10x, 
-                                            linregress_x, linregress_y, tile_size_10x_x, tile_size_10x_y,
+                                            linregress_model, tile_size_10x_x, tile_size_10x_y,
                                             output_match_dir, scale_factor, overlap_ratio=0.5, plot=False ):
     # get the likley 10x tiles that this matches to from the xy coords
     base_file_40x = file_40x.split('/')[-1]
@@ -192,7 +214,7 @@ def get_best_10x_image_match_from_model( file_40x, files_10x_base_name, images_4
         return "", 0.0, [-1,-1], 0
     #x40x, y40x = images_40x_to_xy[ base_file_40x ]
     x40x, y40x = images_40x_to_xy[ base_file_40x_key ]
-    x10x, y10x = get_10x_coords_from_40x_coords( x40x, y40x, linregress_x, linregress_y )
+    x10x, y10x = get_10x_coords_from_40x_coords( x40x, y40x, linregress_model )
     likely_tiles_10x = get_10x_tiles_from_coords( x10x, y10x, sites_to_xy_10x, tile_size_10x_x, tile_size_10x_y )
     files_likely_tiles_10x = []
     for likely_tile in likely_tiles_10x:
@@ -1168,6 +1190,7 @@ def map_40x_to_10x_files_with_10xtile_mapping( list_of_files_40x, well_phenix, i
 
 
     # based on the brute force matches fit a linear model for 40x to 10x coords
+    # fitting needs to be robust to outliers
     print( "Fitting model based on brute force matches" )
     image_0_10x = read( list_of_files_10x[0] )[0]
     image_size_10x_x = np.shape( image_0_10x )[0]
@@ -1190,8 +1213,9 @@ def map_40x_to_10x_files_with_10xtile_mapping( list_of_files_40x, well_phenix, i
                         image_size_10x_x, 
                         corr_thresh,
                         plot)])
-        linregress_x_40x_to_10x = results[0][0]
-        linregress_y_40x_to_10x = results[0][1]
+        #linregress_x_40x_to_10x = results[0][0]
+        #linregress_y_40x_to_10x = results[0][1]
+        linregress_40x_to_10x = results[0]
 
 
 #    linregress_x_40x_to_10x, linregress_y_40x_to_10x = fit_linear_40x_to_10x_from_brute_force_matches( 
@@ -1213,7 +1237,8 @@ def map_40x_to_10x_files_with_10xtile_mapping( list_of_files_40x, well_phenix, i
     with multiprocessing.Pool( processes=num_proc ) as pool:
         results = pool.map( get_best_10x_image_match_from_model_parallel, [( file_40x, files_10x_base_name, images_40x_to_xy, 
                                             sites_to_xy_10x, 
-                                            linregress_x_40x_to_10x, linregress_y_40x_to_10x, 
+                                            linregress_40x_to_10x, 
+                                            #linregress_x_40x_to_10x, linregress_y_40x_to_10x, 
                                             tile_size_10x_x, tile_size_10x_y,
                                             output_dir_match, scale_factor, overlap_ratio_final_matches, plot ) for file_40x in list_of_files_40x] )
 
@@ -1248,5 +1273,4 @@ def check_40x_to_10x_mapping( list_of_files_40x, well_phenix, index_file_phenix,
                         image_size_10x_x, 
                         corr_thresh,
                         plot)])
-        linregress_x_40x_to_10x = results[0][0]
-        linregress_y_40x_to_10x = results[0][1]
+        linregress_40x_to_10x = results[0]
