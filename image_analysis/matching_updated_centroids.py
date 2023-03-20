@@ -240,7 +240,7 @@ def get_best_10x_image_match_from_model( file_40x, files_10x_base_name, images_4
     site_10x_y = sites_to_xy_10x[site_10x][1]
 
     shift_x = best_shift[0]
-    shift_y = best_shitf[1]
+    shift_y = best_shift[1]
     # this is the transformation for the right camera
     # and should also be the transformation for left camera if I did fitting with properly rotated images
     x_10x_by_ccfit = site_10x_x + shift_y * pixel_size_10x
@@ -248,6 +248,7 @@ def get_best_10x_image_match_from_model( file_40x, files_10x_base_name, images_4
 
 
     # write the match file with the expected info as well:
+    base_fname = file_40x.split('/')[-1].split('.tif')[0]
     if not os.path.exists( output_match_dir ):
         os.makedirs( output_match_dir, exist_ok=True )
     with open( f'{output_match_dir}/match_{base_fname}.txt', 'w') as f:
@@ -1187,7 +1188,8 @@ def rescale_40x_to_10x_and_pad_phenix_left_nomove( image_40x_to_rescale, scale_f
                                                          multichannel=False, preserve_range=True)
     rescaled_size = np.shape( image_40x_rescaled )[0]
     pad_size = image_size_10x - rescaled_size
-    padded_image_40x_rescaled = skimage.util.pad( image_40x_rescaled, 
+#    padded_image_40x_rescaled = skimage.util.pad( image_40x_rescaled, 
+    padded_image_40x_rescaled = np.pad( image_40x_rescaled, 
                                                        [(0,pad_size), (0,pad_size)], 
                                                        'constant', constant_values=0 )
     
@@ -1276,7 +1278,7 @@ def map_40x_to_10x_files_with_10xtile_mapping( list_of_files_40x, well_phenix, i
                                             sites_to_xy_10x, 
                                             linregress_40x_to_10x, 
                                             #linregress_x_40x_to_10x, linregress_y_40x_to_10x, 
-                                            tile_size_10x_x, tile_size_10x_y, image_size_10x, pixel_size_10x,
+                                            tile_size_10x_x, tile_size_10x_y, image_size_10x_x, pixel_size_10x,
                                             output_dir_match, scale_factor, overlap_ratio_final_matches, plot ) for file_40x in list_of_files_40x] )
 
 def check_40x_to_10x_mapping( list_of_files_40x, well_phenix, index_file_phenix, 
