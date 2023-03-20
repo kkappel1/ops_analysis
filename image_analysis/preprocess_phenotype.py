@@ -12,7 +12,7 @@ def get_flatfield_correction( list_of_files ):
     for f in list_of_files:
         img = read( f )
         total_pixel_intensity += img
-    save( 'total_pixel_int.tif', total_pixel_intensity )
+    #save( 'total_pixel_int.tif', total_pixel_intensity )
     mean_pixel_intensity = total_pixel_intensity / len( list_of_files )
     # smooth with a gaussian filter
     smooth_value = mean_pixel_intensity.shape[0]/10.

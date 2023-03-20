@@ -102,7 +102,7 @@ def get_well_and_tile_num_from_fname_10x( fname ):
 
 def match_well( plate_num, well_num, out_tag, NUM_PROCESSES, list_of_files_40x, 
                 data_file_10x, data_file_40x, nd2_file_well, match_file_dir, 
-                nuclei_mask_dir_40x, nuclei_mask_dir_10x,
+                nuclei_mask_dir_40x, nuclei_mask_dir_10x, phenotype_10x_dir,
                 THRESHOLD_CC_MATCH=0.30 ):
     
     begin_time = datetime.datetime.now()
@@ -188,7 +188,12 @@ def match_well( plate_num, well_num, out_tag, NUM_PROCESSES, list_of_files_40x,
             nuclei_10x_mask = read( nuclei_10x_mask_fname )
 
             # get the corresponding "phenotype" images for 10x and 40x
-            phenotype_10x_fname = f'test_dapi_gfp_tifs/test_dapi_gfp-tile{best_image_match_10x_tile}.tif'
+            glob_phenotype_10x_fname = glob.glob( f'{phenotype_10x_dir}/Well{well_num}*-tile{best_image_match_10x_tile}.tif' )
+            if len( glob_phenotype_10x_fname ) != 1:
+                print( "Problem with phenotype 10x filenames", phenotype_10x_fnames )
+                return
+            phenotype_10x_fname = glob_phenotype_10x_fname[0]
+            #phenotype_10x_fname = f'test_dapi_gfp_tifs/test_dapi_gfp-tile{best_image_match_10x_tile}.tif'
             phenotype_40x_fname = file_40x.replace( '-ch1', '-ch2' )
             if not os.path.exists( phenotype_10x_fname ):
                 print( "missing phenotype 10x fname", phenotype_10x_fname )
@@ -290,6 +295,8 @@ if __name__ == '__main__':
         help='directory with all the 40x nuclei masks, e.g. nuclei_masks_plate_10_well_B2_out_tag/' )
     parser.add_argument( '-nuclei_mask_dir_10x', 
         help='directory with all the 10x nuclei masks, e.g. process_cellpose_nophenotype_all/' )
+    parser.add_argument( '-phenotype_10x_dir', 
+        help='directory with the 10x phenotype files, e.g. SBS_images/plate_10_tiffs_rotated/well_C2/GFP_cycle_8/' )
     parser.add_argument( '-threshold_cc_match', type=float, default=0.30, 
         help='threshold for 40x to 10x raw image match' )
 
@@ -297,5 +304,5 @@ if __name__ == '__main__':
     match_well( args.plate_num, args.well_num, args.out_tag, args.num_proc,
                 args.list_dapi_files_40x, args.data_file_10x, args.data_file_40x,
                 args.nd2_file_well_cycle_1, args.match_file_dir, args.nuclei_mask_dir_40x,
-                args.nuclei_mask_dir_10x, args.threshold_cc_match )
+                args.nuclei_mask_dir_10x, args.phenotype_10x_dir, args.threshold_cc_match )
 
