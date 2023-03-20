@@ -920,6 +920,15 @@ def get_condensate_properties( condensates, image, intensity_image, label,
 
     num_condensates = np.max( condensates_labeled )
 
+    # get the size distribution of the condensates
+    properties_cond = skimage.measure.regionprops_table( condensates_labeled, intensity_image,
+                                        properties=('label','mean_intensity','area','eccentricity'))
+    mean_condensate_area = np.mean( properties_cond['area'] )
+    std_condensate_area = np.std( properties_cond['area'] )
+    mean_condensate_eccentricity = np.mean( properties_cond['eccentricity'] )
+    std_condensate_eccentricity = np.std( properties_cond['eccentricity'] )
+
+
 
     if plot:
 
@@ -953,7 +962,11 @@ def get_condensate_properties( condensates, image, intensity_image, label,
         'std_condensate_intensity_no_shrink': std_condensate_intensity_no_shrink,
         'mean_dilute_phase_intensity': mean_dilute_phase_intensity,
         'std_dilute_phase_intensity': std_dilute_phase_intensity,
-        'num_condensates': num_condensates
+        'num_condensates': num_condensates,
+        'mean_condensate_area': mean_condensate_area,
+        'std_condensate_area': std_condensate_area,
+        'mean_condensate_eccentricity': mean_condensate_eccentricity,
+        'std_condensate_eccentricity': std_condensate_eccentricity,
     }
 
     return condensates_labeled, condensates_properties_dict
@@ -1741,6 +1754,10 @@ def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
         'total_gfp_intensity_GFP': [],
         'frac_gfp_in_cond_GFP': [],
         'total_cond_area_GFP': [],
+        'mean_condensate_area': [],
+        'std_condensate_area': [],
+        'mean_condensate_eccentricity': [],
+        'std_condensate_eccentricity': [],
         'cell_img_gfp_file': [],
         'cell_img_dapi_file': [],
         'cell_img_mask_file': [],
@@ -1907,6 +1924,14 @@ def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
             condensates_properties_dict_GFP['total_condensate_intensity'] / total_intensity_GFP )
         nuclei_dict['total_cond_area_GFP'].append( 
             condensates_properties_dict_GFP['total_condensate_area'])
+        nuclei_dict['mean_condensate_area'].append(
+                condensates_properties_dict_GFP['mean_condensate_area'])
+        nuclei_dict['std_condensate_area'].append(
+                condensates_properties_dict_GFP['std_condensate_area'])
+        nuclei_dict['mean_condensate_eccentricity'].append(
+                condensates_properties_dict_GFP['mean_condensate_eccentricity'])
+        nuclei_dict['std_condensate_eccentricity'].append(
+                condensates_properties_dict_GFP['std_condensate_eccentricity'])
         nuclei_dict['cell_img_gfp_file'].append( output_fname_gfp )
         nuclei_dict['cell_img_dapi_file'].append( output_fname_dapi )
         nuclei_dict['cell_img_mask_file'].append( output_fname_mask )
@@ -1957,7 +1982,10 @@ def phenotype_phenix_2channel( fname_dapi, fname_gfp,
         'total_gfp_intensity_GFP': [],
         'frac_gfp_in_cond_GFP': [],
         'total_cond_area_GFP': [],
-        
+        'mean_condensate_area': [],
+        'std_condensate_area': [],
+        'mean_condensate_eccentricity': [],
+        'std_condensate_eccentricity': [],
     }
 
     num_nuclei = len(np.unique(final_nuclei) ) -1
@@ -2050,7 +2078,14 @@ def phenotype_phenix_2channel( fname_dapi, fname_gfp,
             condensates_properties_dict_GFP['total_condensate_intensity'] / total_intensity_GFP )
         nuclei_dict['total_cond_area_GFP'].append( 
             condensates_properties_dict_GFP['total_condensate_area'])
-        
+        nuclei_dict['mean_condensate_area'].append( 
+                condensates_properties_dict_GFP['mean_condensate_area'])
+        nuclei_dict['std_condensate_area'].append( 
+                condensates_properties_dict_GFP['std_condensate_area'])
+        nuclei_dict['mean_condensate_eccentricity'].append(
+                condensates_properties_dict_GFP['mean_condensate_eccentricity'])
+        nuclei_dict['std_condensate_eccentricity'].append(
+                condensates_properties_dict_GFP['std_condensate_eccentricity'])
 
     df_nuclei = pd.DataFrame(data=nuclei_dict)
     return df_nuclei, final_nuclei
