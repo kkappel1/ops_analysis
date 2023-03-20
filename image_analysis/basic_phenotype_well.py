@@ -37,7 +37,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 
-def phenotype_well( plate_num, well_num, out_tag, tif_40x_base_dir, list_dapi_files, 
+def phenotype_well( plate_num, well_num, out_tag, output_tif_40x_base_dir, list_dapi_files, 
         check_match, match_dir, NUM_PROCESSES ):
     if check_match: 
         print( "Checking for match files" )
@@ -70,8 +70,8 @@ def phenotype_well( plate_num, well_num, out_tag, tif_40x_base_dir, list_dapi_fi
             list_of_dapi_files.append( f )
             list_of_gfp_files.append( gfp_file )
             tile_num = get_field_num_from_phenix_name( f )
-            file_save_dir = '{tif_40x_base_dir}/CELL_IMAGES_{out_tag}/well_{well_num}/field_{tile_num}/'.format(
-                    tif_40x_base_dir=tif_40x_base_dir,out_tag=out_tag,well_num=well_num,tile_num=tile_num)
+            file_save_dir = '{output_tif_40x_base_dir}/CELL_IMAGES_{out_tag}/well_{well_num}/field_{tile_num}/'.format(
+                    output_tif_40x_base_dir=output_tif_40x_base_dir,out_tag=out_tag,well_num=well_num,tile_num=tile_num)
             files_and_tiles.append( [f, gfp_file, tile_num, file_save_dir] )
 
         print( "len(files_and_tiles)", len(files_and_tiles) )
@@ -86,7 +86,7 @@ def phenotype_well( plate_num, well_num, out_tag, tif_40x_base_dir, list_dapi_fi
     
         # write out dapi, gfp, and mask files for each cell
         # need file_save_dir and field_name
-        # use tif_40x_base_dir
+        # use output_tif_40x_base_dir
 
         phenotype_results = pool.starmap( prelim_phenotype_phenix_2channel_write_img_files, [(x[0], x[1], ffc_dapi, ffc_gfp, 
                                 well_num, x[2], x[3], min_size, smooth_size, threshold_initial_guess, 
@@ -121,7 +121,7 @@ if __name__ == '__main__':
     parser.add_argument( '-plate_num', type=str, default="", help='plate number to analyze' )
     parser.add_argument( '-well_num', type=str, default="", help='well number to analyze' )
     parser.add_argument( '-out_tag', type=str, default="", help='output tag' )
-    parser.add_argument( '-tif_40x_base_dir', type=str, default="", 
+    parser.add_argument( '-output_tif_40x_base_dir', type=str, default="", 
                 help='base dir for tiffs, e.g. phenotype_images/plate_10/' )
     parser.add_argument( '-check_for_match_file', default=False, action='store_true',
                 help='check if there is a match file for each image before using for phenotyping' )
@@ -130,5 +130,5 @@ if __name__ == '__main__':
     parser.add_argument( '-num_proc', type=int, default=1, help="number of processors to run on" )
     args = parser.parse_args()
     phenotype_well( args.plate_num, args.well_num, args.out_tag,
-                args.tif_40x_base_dir, args.list_dapi_files, 
+                args.output_tif_40x_base_dir, args.list_dapi_files, 
                 args.check_for_match_file, args.match_dir, args.num_proc )
