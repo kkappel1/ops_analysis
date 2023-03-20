@@ -133,8 +133,6 @@ def match_well( plate_num, well_num, out_tag, NUM_PROCESSES, list_of_files_40x,
     best_cc_mags = []
     best_image_match_10xs = []
     plot=True
-    THRESHOLD_MOST_FREQ_FRACTION = 0.5 
-    THRESHOLD_MOST_NEXT=3.0
     files_40x_actually_used = []
     plot_tags = []
     tile_origins_10x = []
@@ -154,15 +152,25 @@ def match_well( plate_num, well_num, out_tag, NUM_PROCESSES, list_of_files_40x,
             match_fname = f'{match_file_dir}/match_{base_fname}.txt'
             if not os.path.exists( match_fname ):
                 continue
+            # match file format:
+            # {image} {cc_mag} {shift_x} {shift_y} {expected_x} {expected_y} {actual_x} {actual_y}
+            #  0       1        2         3         4            5            6          7
+            #  -8      -7       -6        -5        -4           -3           -2         -1
+            #  -4      -3       -2        -1   (old format, without expected/actual xy)
             for line in open(match_fname):
-                best_image_match_10x = line.split()[-4]
+                best_image_match_10x = line.split()[-8]
                 if best_image_match_10x.startswith('SSD'):
-                    best_image_match_10x = line.split()[-5] + ' ' + line.split()[-4]
+                    best_image_match_10x = line.split()[-9] + ' ' + line.split()[-8]
                 best_image_match_10x = best_image_match_10x.replace( '//','/')
-                best_cc_mag = float(line.split()[-3])
-                shift_x = float( line.split()[-2])
-                shift_y = float( line.split()[-1])
+                best_cc_mag = float(line.split()[-7])
+                shift_x = float( line.split()[-6])
+                shift_y = float( line.split()[-5])
                 best_shift = np.array([shift_x,shift_y])
+                expected_x = float( line.split()[-4] )
+                expected_y = float( line.split()[-3] )
+                actual_x = float( line.split()[-2] )
+                actual_y = float( line.split()[-1] )
+                dist_actual_expected = math.dist( [expected_x, expected_y], [actual_x, actual_y] )
             if best_cc_mag < THRESHOLD_CC_MATCH:
                 continue
             # get the 40x nuclei mask

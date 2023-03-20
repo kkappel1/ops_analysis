@@ -200,7 +200,7 @@ def get_10x_tiles_from_coords(x10x, y10x, sites_to_xy_10x, tile_size_10x_x, tile
 
 # files_10x_base_name should be something like "/Volumes/Extreme SSD/20221026_SBS_plate_1_tiffs/well_B3/cycle_1/WellB3_ChannelSBS_DAPI,SBS_Cy3,SBS_A594,SBS_Cy5,SBS_Cy7_Seq0000-"
 def get_best_10x_image_match_from_model( file_40x, files_10x_base_name, images_40x_to_xy, sites_to_xy_10x, 
-                                            linregress_model, tile_size_10x_x, tile_size_10x_y,
+                                            linregress_model, tile_size_10x_x, tile_size_10x_y, image_size_10x, pixel_size_10x,
                                             output_match_dir, scale_factor, overlap_ratio=0.5, plot=False ):
     # get the likley 10x tiles that this matches to from the xy coords
     base_file_40x = file_40x.split('/')[-1]
@@ -228,9 +228,35 @@ def get_best_10x_image_match_from_model( file_40x, files_10x_base_name, images_4
         return "", 0.0, [-1,-1], 0
     # find the best tile match from these likely tiles 
     (best_image_match, best_max_cc_mag, best_shift, final_shifted_40x_image) = get_best_10x_image_match_phenix_left_nomove( 
-                file_40x, files_likely_tiles_10x, scale_factor, output_dir=output_match_dir, overlap_ratio=overlap_ratio, plot=plot)
+                file_40x, files_likely_tiles_10x, scale_factor, output_dir=output_match_dir, overlap_ratio=overlap_ratio, plot=plot,
+                write_file=False)
 
-    return best_image_match, best_max_cc_mag, best_shift, final_shifted_40x_image
+    # get the expected (from model) and actual (from best CC) 10x coordinates
+    # expected coordinates: x10x and y10x
+    # actual (from best CC) 10x coordinates: x_10x_by_ccfit, y_10x_by_ccfit
+
+    site_10x = int(best_image_match.split('/')[-1].split('tile')[-1].split('.tif')[0])
+    site_10x_x = sites_to_xy_10x[site_10x][0]
+    site_10x_y = sites_to_xy_10x[site_10x][1]
+
+    shift_x = best_shift[0]
+    shift_y = best_shitf[1]
+    # this is the transformation for the right camera
+    # and should also be the transformation for left camera if I did fitting with properly rotated images
+    x_10x_by_ccfit = site_10x_x + shift_y * pixel_size_10x
+    y_10x_by_ccfit = site_10x_y + (image_size_10x-shift_x)* pixel_size_10x
+
+
+    # write the match file with the expected info as well:
+    if not os.path.exists( output_match_dir ):
+        os.makedirs( output_match_dir, exist_ok=True )
+    with open( f'{output_match_dir}/match_{base_fname}.txt', 'w') as f:
+        f.write( '{image} {cc_mag} {shift_x} {shift_y} {expected_x} {expected_y} {actual_x} {actual_y}\n'.format(
+            image=best_image_match, cc_mag=best_max_cc_mag, shift_x=best_shift[0], shift_y=best_shift[1],
+            expected_x=x10x, expected_y=y10x, actual_x=x_10x_by_ccfit, actual_y=y_10x_by_ccfit ))
+
+
+    return best_image_match, best_max_cc_mag, best_shift, final_shifted_40x_image, x10x, y10x, x_10x_by_ccfit, y_10x_by_ccfit
 
 
 def bin_array(arr, bin_size):
@@ -1064,7 +1090,7 @@ def get_best_10x_image_match_mask_phenix_left_nomove( dapi_file_40x, list_of_fil
 
 
 def get_best_10x_image_match_phenix_left_nomove( dapi_file_40x, list_of_files_10x, scale_factor, 
-                                         output_dir, overlap_ratio=1., plot=False ):
+                                         output_dir, overlap_ratio=1., plot=False, write_file=True ):
 
     if len( list_of_files_10x ) < 1: 
         return
@@ -1144,11 +1170,12 @@ def get_best_10x_image_match_phenix_left_nomove( dapi_file_40x, list_of_files_10
         plt.close()
 
     # write to a file
-    if not os.path.exists( output_dir ):
-        os.makedirs( output_dir, exist_ok=True )
-    with open( '{output_dir}/match_{name}.txt'.format(name=base_fname, output_dir=output_dir), 'w') as f:
-        f.write( '{image} {cc_mag} {shift_x} {shift_y}\n'.format(
-            image=best_image_match, cc_mag=best_max_cc_mag, shift_x=best_shift[0], shift_y=best_shift[1] ))
+    if write_file:
+        if not os.path.exists( output_dir ):
+            os.makedirs( output_dir, exist_ok=True )
+        with open( '{output_dir}/match_{name}.txt'.format(name=base_fname, output_dir=output_dir), 'w') as f:
+            f.write( '{image} {cc_mag} {shift_x} {shift_y}\n'.format(
+                image=best_image_match, cc_mag=best_max_cc_mag, shift_x=best_shift[0], shift_y=best_shift[1] ))
     
     return best_image_match, best_max_cc_mag, best_shift, final_shifted_40x_image
 
@@ -1249,7 +1276,7 @@ def map_40x_to_10x_files_with_10xtile_mapping( list_of_files_40x, well_phenix, i
                                             sites_to_xy_10x, 
                                             linregress_40x_to_10x, 
                                             #linregress_x_40x_to_10x, linregress_y_40x_to_10x, 
-                                            tile_size_10x_x, tile_size_10x_y,
+                                            tile_size_10x_x, tile_size_10x_y, image_size_10x, pixel_size_10x,
                                             output_dir_match, scale_factor, overlap_ratio_final_matches, plot ) for file_40x in list_of_files_40x] )
 
 def check_40x_to_10x_mapping( list_of_files_40x, well_phenix, index_file_phenix, 
