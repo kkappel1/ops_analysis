@@ -149,6 +149,7 @@ def fit_linear_40x_to_10x_from_brute_force_matches( brute_force_match_dir,
         # save with unique file name 
         plt.savefig( brute_force_match_dir + '/images/' + unique_file_name + 'y_10x_vs_40x.png' )
         plt.clf()
+        plt.close()
         
         fig, ax = plt.subplots( 1,1,figsize=(5,5))
         ax.plot( xs, linregress_x.slope * xs + linregress_x.intercept )
@@ -156,6 +157,7 @@ def fit_linear_40x_to_10x_from_brute_force_matches( brute_force_match_dir,
         ax.scatter( x40x_for_fitting, x10x_for_fitting, alpha=0.3, c=np.arange(len(y10x_for_fitting)), cmap='plasma')
         plt.savefig( brute_force_match_dir + '/images/' + unique_file_name + 'x_10x_vs_40x.png' )
         plt.clf()
+        plt.close()
     
 
     #return linregress_x, linregress_y
@@ -457,6 +459,7 @@ def map_40x_nuclei_to_10x_nuclei_centroid_dist_phenotype( nuclei_mask_40x, nucle
             plt.text( centroid_40x[0], centroid_40x[1], mindex )
         plt.savefig( "overlay_matches_centroid_{plot_tag}.pdf".format(plot_tag=plot_tag) )
         plt.clf()
+        plt.close()
         
     return dict_all_40x_10x_match_data, num_matched_nuclei, frac_matched_nuclei, duplicated_10x_nuclei
     #return dict_40x_nuclei_to_10x_nuclei, num_matched_nuclei, frac_matched_nuclei, duplicated_10x_nuclei
@@ -733,6 +736,7 @@ def SCRATCH_map_40x_nuclei_to_10x_nuclei_centroid_dist_phenotype( nuclei_mask_40
         plt_index += 1
     plt.savefig( f"phenotype_image_matches_{plot_tag}.pdf" )
     plt.clf()
+    plt.close()
         
     
 
@@ -747,6 +751,7 @@ def SCRATCH_map_40x_nuclei_to_10x_nuclei_centroid_dist_phenotype( nuclei_mask_40
     #plt.plot( xs, ys )
     plt.savefig( f'test_compare_int_{plot_tag}.pdf' )
     plt.clf()
+    plt.close()
     num_matched_nuclei = sum([x>0 for x in dict_40x_nuclei_to_10x_nuclei.values()])
     matched_nuclei = [x for x in dict_40x_nuclei_to_10x_nuclei.values() if x>0]
     frac_matched_nuclei = num_matched_nuclei/len(df_40x_centroids)
@@ -772,6 +777,7 @@ def SCRATCH_map_40x_nuclei_to_10x_nuclei_centroid_dist_phenotype( nuclei_mask_40
         plt.savefig( "overlay_matches_centroid_{plot_tag}.pdf".format(plot_tag=plot_tag) )
         plt.clf()
         #plt.show()
+        plt.close()
         
     return dict_40x_nuclei_to_10x_nuclei, num_matched_nuclei, frac_matched_nuclei, duplicated_10x_nuclei, ints_10x, ints_40x
 
@@ -884,6 +890,7 @@ def map_40x_nuclei_to_10x_nuclei_centroid_dist( nuclei_mask_40x, nuclei_mask_10x
             plt.text( centroid_40x[0], centroid_40x[1], mindex )
         plt.savefig( "overlay_matches_centroid_{plot_tag}.pdf".format(plot_tag=plot_tag) )
         plt.clf()
+        plt.close()
         #plt.show()
         
     return dict_40x_nuclei_to_10x_nuclei, num_matched_nuclei, frac_matched_nuclei, duplicated_10x_nuclei
@@ -991,6 +998,7 @@ def get_best_10x_image_match_mask_phenix_left_nomove( dapi_file_40x, list_of_fil
         ax.imshow( dapi_image_10x, interpolation='none', cmap='Reds' )
         plt.savefig( 'test_10x_segment.pdf' )
         plt.clf()
+        plt.close()
 
 
 
@@ -1041,6 +1049,7 @@ def get_best_10x_image_match_mask_phenix_left_nomove( dapi_file_40x, list_of_fil
         plt.savefig( "{output_dir}/images/test_overlay_best_match_{name}.pdf".format(output_dir=output_dir,name=base_fname) )
         #plt.savefig( "test_overlay_best_match_{name}.pdf".format(name=base_fname) )
         plt.clf()
+        plt.close()
         #plt.show()
 
     # write to a file
@@ -1132,6 +1141,7 @@ def get_best_10x_image_match_phenix_left_nomove( dapi_file_40x, list_of_files_10
         #plt.savefig( "test_overlay_best_match_{name}.pdf".format(name=base_fname) )
         plt.clf()
         #plt.show()
+        plt.close()
 
     # write to a file
     if not os.path.exists( output_dir ):
