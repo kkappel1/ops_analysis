@@ -56,7 +56,7 @@ def combine_10x_40x_data( dict_40x_nuclei_to_10x_nuclei, file_40x, best_image_ma
 
 
 def combine_10x_40x_data_and_info( dict_40x_nuclei_to_10x_nuclei, file_40x, best_image_match_10x,
-                            best_cc_mag, full_df_10x_cells, full_df_nuclei ):
+                            best_cc_mag, distance_image_match, full_df_10x_cells, full_df_nuclei ):
     # include all the matching info in the dataframe 
     df_merged_data = pd.DataFrame()
     for cell_40x in dict_40x_nuclei_to_10x_nuclei.keys():
@@ -87,6 +87,7 @@ def combine_10x_40x_data_and_info( dict_40x_nuclei_to_10x_nuclei, file_40x, best
             merged_data['match_40x_centroid_x'] = [ dict_40x_nuclei_to_10x_nuclei[ cell_40x ][ 'match_40x_centroid' ][0]]
             merged_data['match_40x_centroid_y'] = [ dict_40x_nuclei_to_10x_nuclei[ cell_40x ][ 'match_40x_centroid' ][1]]
             merged_data['match_file_cc_mag'] = [ best_cc_mag ]
+            merged_data['match_distance_exp_act'] = [ distance_image_match ]
             df_merged_data = df_merged_data.append( merged_data )
     return df_merged_data
 
@@ -103,7 +104,7 @@ def get_well_and_tile_num_from_fname_10x( fname ):
 def match_well( plate_num, well_num, out_tag, NUM_PROCESSES, list_of_files_40x, 
                 data_file_10x, data_file_40x, nd2_file_well, match_file_dir, 
                 nuclei_mask_dir_40x, nuclei_mask_dir_10x, phenotype_10x_dir,
-                THRESHOLD_CC_MATCH=0.30 ):
+                THRESHOLD_CC_MATCH=0.30, DIST_THRESHOLD_MATCH=15.0 ):
     
     begin_time = datetime.datetime.now()
     # load the df for the 10x cells
@@ -131,6 +132,7 @@ def match_well( plate_num, well_num, out_tag, NUM_PROCESSES, list_of_files_40x,
     phenotype_40x_fnames = []
     best_shifts = []
     best_cc_mags = []
+    distances_image_match = []
     best_image_match_10xs = []
     plot=True
     files_40x_actually_used = []
@@ -171,7 +173,8 @@ def match_well( plate_num, well_num, out_tag, NUM_PROCESSES, list_of_files_40x,
                 actual_x = float( line.split()[-2] )
                 actual_y = float( line.split()[-1] )
                 dist_actual_expected = math.dist( [expected_x, expected_y], [actual_x, actual_y] )
-            if best_cc_mag < THRESHOLD_CC_MATCH:
+            #print( base_fname, dist_actual_expected, best_cc_mag )
+            if (best_cc_mag < THRESHOLD_CC_MATCH) or (dist_actual_expected > DIST_THRESHOLD_MATCH):
                 continue
             # get the 40x nuclei mask
             nuclei_mask_40x_fname = f'{nuclei_mask_dir_40x}/nuclei_mask_{base_fname}.tif'
@@ -213,6 +216,7 @@ def match_well( plate_num, well_num, out_tag, NUM_PROCESSES, list_of_files_40x,
             best_shifts.append( best_shift )
             files_40x_actually_used.append( file_40x )
             best_cc_mags.append( best_cc_mag )
+            distances_image_match.append( dist_actual_expected ) 
             tile_num_40x = get_field_num_from_phenix_name( file_40x )
             well_num_10x, tile_num_10x =  get_well_and_tile_num_from_fname_10x( best_image_match_10x )
             tile_origins_10x.append( sites_to_xy_10x[ tile_num_10x ] )
@@ -263,6 +267,7 @@ def match_well( plate_num, well_num, out_tag, NUM_PROCESSES, list_of_files_40x,
             files_40x_actually_used[i],
             best_image_match_10xs[i],
             best_cc_mags[i],
+            distances_image_match[i],
             full_df_10x_cells,
             full_df_nuclei) for i in range(len(mapping_results))] )
         for mapped_df in mapping_results_dfs:
@@ -299,10 +304,13 @@ if __name__ == '__main__':
         help='directory with the 10x phenotype files, e.g. SBS_images/plate_10_tiffs_rotated/well_C2/GFP_cycle_8/' )
     parser.add_argument( '-threshold_cc_match', type=float, default=0.30, 
         help='threshold for 40x to 10x raw image match' )
+    parser.add_argument( '-threshold_dist_match', type=float, default=15.0, 
+        help='threshold for distance between actual and expected 40x to 10x match coordinates' )
 
     args = parser.parse_args()
     match_well( args.plate_num, args.well_num, args.out_tag, args.num_proc,
                 args.list_dapi_files_40x, args.data_file_10x, args.data_file_40x,
                 args.nd2_file_well_cycle_1, args.match_file_dir, args.nuclei_mask_dir_40x,
-                args.nuclei_mask_dir_10x, args.phenotype_10x_dir, args.threshold_cc_match )
+                args.nuclei_mask_dir_10x, args.phenotype_10x_dir, args.threshold_cc_match,
+                args.threshold_dist_match)
 
