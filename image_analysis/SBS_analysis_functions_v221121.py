@@ -891,13 +891,14 @@ def segment_nuclei_phenotype( dapi_image,
     return final_nuclei
 
 def get_condensate_properties( condensates, image, intensity_image, label,
-                              final_filled_hole_mask_filt, plot=True):
+                              final_filled_hole_mask_filt, plot=True, condensates_for_dilute=None):
     condensates_labeled, _, _ = skimage.segmentation.relabel_sequential(condensates)
 
     # do morphological erosion to get mean dilute and condensate intensities
     # shrink condensates
     inverse_condensates = np.invert( condensates > 0)
-    NUM_SHRINK_COND_PIXELS = 5
+    NUM_SHRINK_COND_PIXELS = 2
+    #NUM_SHRINK_COND_PIXELS = 5
     NUM_EXPAND_COND_PIXELS = 8
     shrunk_condensates = np.invert( expand_labels( inverse_condensates, NUM_SHRINK_COND_PIXELS) )
 
@@ -912,7 +913,9 @@ def get_condensate_properties( condensates, image, intensity_image, label,
     std_condensate_intensity_no_shrink = np.std( intensity_image[condensates>0] )
 
     # expand condensates
-    expanded_condensates = expand_labels( condensates, NUM_EXPAND_COND_PIXELS)
+    if condensates_for_dilute is None:
+        condensates_for_dilute = condensates
+    expanded_condensates = expand_labels( condensates_for_dilute, NUM_EXPAND_COND_PIXELS)
     dilute_pixel_mask = (expanded_condensates == 0) & image & final_filled_hole_mask_filt
 
     mean_dilute_phase_intensity = np.mean( intensity_image[dilute_pixel_mask])
@@ -943,6 +946,7 @@ def get_condensate_properties( condensates, image, intensity_image, label,
         ax[2].set_title( 'shrunk_condensates', fontsize=5)
         ax[3].imshow( dilute_pixel_mask, cmap='gray' )
         ax[3].set_title( 'dilute_pixel_mask', fontsize=5)
+        #plt.savefig( f'view_2_condensates_{label}.pdf' )
 
         fig2, ax2 = plt.subplots(1,2,figsize=(5, 5))
         for i in range(2):
@@ -952,6 +956,7 @@ def get_condensate_properties( condensates, image, intensity_image, label,
         ax2[1].imshow( color.label2rgb(condensates_labeled, bg_label=0) )
 
         plt.show()
+        plt.clf()
 
     condensates_properties_dict = {
         'total_condensate_intensity': total_condensate_intensity,
@@ -1019,6 +1024,8 @@ def get_condensates_general_explicit( image,
     prelim_gfp_intensity_pixels = region_image[ final_filled_hole_mask_filt ]
     prelim_avg_gfp_intensity = np.mean( prelim_gfp_intensity_pixels )
     std_gfp_pixels = np.std( prelim_gfp_intensity_pixels )
+    prelim_dilute_pixels = prelim_gfp_intensity_pixels[ prelim_gfp_intensity_pixels < 2.*prelim_avg_gfp_intensity]
+    mean_prelim_dilute_pixels = np.mean( prelim_dilute_pixels )
     std_prelim_dilute_pixels = np.std( prelim_gfp_intensity_pixels[ prelim_gfp_intensity_pixels < 2.*prelim_avg_gfp_intensity])
     # first find holes - use set intensity threshold. check that holes do not account for more than X% of total cell area
     # then get prelim average intensity outside of holes
@@ -1026,7 +1033,8 @@ def get_condensates_general_explicit( image,
 
     # find condensates - use intensity threshold relative to prelim average intensity outside holes
     #condensate_threshold = max(1.5*prelim_avg_dilute_intensity,condensate_cutoff_intensity)
-    condensate_threshold = max(prelim_avg_gfp_intensity+THRESH_STDS*std_prelim_dilute_pixels,
+    #condensate_threshold = max(prelim_avg_gfp_intensity+THRESH_STDS*std_prelim_dilute_pixels,
+    condensate_threshold = max(mean_prelim_dilute_pixels+THRESH_STDS*std_prelim_dilute_pixels,
                                condensate_cutoff_intensity)
     condensate_mask = intensity_image > condensate_threshold
 
@@ -1044,47 +1052,121 @@ def get_condensates_general_explicit( image,
 
     # segment the condensates
     condensates_ = ops.process.apply_watershed(filled_cond_mask_nosmall, smooth=1)
+    # get rid of "condensates" that touch the edge of the mask - this is necessary to get rid of 
+    # things that are not really inside the cell
+    mask_border = skimage.segmentation.expand_labels( np.invert( image ) )
+    mask_border = np.invert( mask_border )
+    # clear any condensates touching the border of the image
     condensates = skimage.segmentation.clear_border(condensates_)
+    # clear any condensates touching the border of the mask
+    condensates = skimage.segmentation.clear_border(condensates, mask=mask_border)
 
     # optionally save the condensates to a file
     if save_file != '':
         save( save_file, condensates )
 
 
+#    # test another way of segmenting condensates
+#    # try to threshold the image into foreground and background?
+#    intensity_image_hist = np.histogram( intensity_image[ intensity_image > 0], bins=256 )
+#    threshold_otsu = skimage.filters.threshold_otsu(  hist=intensity_image_hist[0], nbins=256 )
+#    #print( intensity_image_hist[1][threshold_otsu], condensate_threshold )
+#
+#
+#    # add a more conservative measure of the average diltue intensity 
+#    # if the threshold standard deviations for identifying condensates = 0 (so super liberal definition of condensates)
+#    # the call the remaining pixels (except "hole" pixels) the dilute phase -- get the mean and standard deviation of these pixels
+#    # this will be the "conservative" dilute phase intensity
+#    liberal_condensate_threshold = max( mean_prelim_dilute_pixels+1.0*std_prelim_dilute_pixels, condensate_cutoff_intensity )
+#    conservative_dilute_mean = np.mean(prelim_gfp_intensity_pixels[prelim_gfp_intensity_pixels < liberal_condensate_threshold])
+#    #conservative_dilute_mean = np.mean(prelim_gfp_intensity_pixels[prelim_gfp_intensity_pixels < mean_prelim_dilute_pixels])
+
+    # do GLCM calculation
+    scale16to8 = np.power(2,8) / np.power(2,16)
+    scaled_intensity_image = intensity_image * scale16to8
+    sclaed_intensity_image = np.round( scaled_intensity_image )
+    scaled_intensity_image = scaled_intensity_image.astype( "uint8" )
+
+    # remove the 0th row and 0th column of the co-occurrence matrix to get rid of the values for the masked pixels
+    glcm = skimage.feature.greycomatrix( scaled_intensity_image, distances=[5], 
+            angles=[0], levels=256, symmetric=True, normed=True )[1:, 1:, :, :]
+    glcm_dissim = skimage.feature.greycoprops( glcm, 'dissimilarity' )[0,0]
+    glcm_contrast = skimage.feature.greycoprops( glcm, 'contrast' )[0,0]
+    glcm_homogeneity = skimage.feature.greycoprops( glcm, 'homogeneity' )[0,0]
+    glcm_correlation = skimage.feature.greycoprops( glcm, 'correlation' )[0,0]
+    glcm_energy = skimage.feature.greycoprops( glcm, 'energy' )[0,0]
+
     if plot:
         fig, ax = plt.subplots(1,13,figsize=(10, 2))
         for i in range(13):
             ax[i].set_axis_off()
 
-        ax[0].imshow( intensity_image, cmap='gray', vmin=0, vmax=5000)
+        #ax[0].imshow( intensity_image, cmap='gray', vmin=0, vmax=1500)
+        ax[0].imshow( intensity_image, cmap='gray', vmin=0, vmax=3000, interpolation='none')
         ax[0].set_title( label, fontsize=5)
-        ax[1].imshow( hole_mask, cmap='gray')
+        ax[1].imshow( hole_mask, cmap='gray',interpolation='none')
         ax[1].set_title('hole_mask', fontsize=5)
 
-        ax[2].imshow( filled_hole_mask, cmap='gray')
+        ax[2].imshow( filled_hole_mask, cmap='gray', interpolation='none')
         ax[2].set_title('filled_hole_mask', fontsize=5)
-        ax[3].imshow( filled_hole_mask_filt, cmap='gray')
+        ax[3].imshow( filled_hole_mask_filt, cmap='gray', interpolation='none')
         ax[3].set_title('filled_hole_mask_filt', fontsize=5)
-        ax[4].imshow( final_filled_hole_mask_filt, cmap='gray')
+        ax[4].imshow( final_filled_hole_mask_filt, cmap='gray', interpolation='none')
         ax[4].set_title('final_filled_hole_mask_filt', fontsize=5)
-        ax[5].imshow( condensate_mask, cmap='gray')
+        ax[5].imshow( condensate_mask, cmap='gray', interpolation='none')
         ax[5].set_title( 'condensate_mask', fontsize=5)
-        ax[6].imshow( filled_cond_mask, cmap='gray')
+        ax[6].imshow( filled_cond_mask, cmap='gray', interpolation='none')
         ax[6].set_title( 'filled_cond_mask', fontsize=5)
-        ax[7].imshow( filled_cond_mask_nosmall, cmap='gray')
+        ax[7].imshow( filled_cond_mask_nosmall, cmap='gray', interpolation='none')
         ax[7].set_title( 'filled_cond_mask_nosmall', fontsize=5)
-        ax[8].imshow( condensates_, cmap='gray')
+        ax[8].imshow( condensates_, cmap='gray', interpolation='none')
         ax[8].set_title( 'condensates_', fontsize=5)
+        ax[9].imshow( color.label2rgb(condensates, bg_label=0), cmap='gray', interpolation='none')
+        #ax[9].imshow( condensates, cmap='gray', interpolation='none')
+        ax[9].set_title( 'condensates', fontsize=5)
+
+#        ax[10].set_title( 'glcm dissim %0.2f' %(glcm_dissim) )
+#        ax[10].imshow( intensity_image, cmap='gray', vmin=0, vmax=3000, interpolation='none')
+#        blobs = skimage.feature.blob_log( intensity_image, min_sigma=1, max_sigma=2, num_sigma=2, threshold=0.0025 )
+#        #blobs = skimage.feature.blob_log( intensity_image, min_sigma=1, max_sigma=10, threshold=0.0025 )
+#        #blobs = skimage.feature.blob_log( intensity_image, min_sigma=1, max_sigma=10, threshold=0.005 )
+#        for blob in blobs:
+#            y, x, r = blob
+#            c = plt.Circle((x,y), r, color='red', linewidth=1, fill=False )
+#            ax[10].add_patch( c )
+#        # find local peaks?
+#        peaks = skimage.feature.peak_local_max( intensity_image, threshold_abs=condensate_threshold, 
+#                footprint = np.ones((20,20)), labels=image )
+#        ax[11].imshow( intensity_image, cmap='gray', vmin=0, vmax=3000, interpolation='none')
+#        for peak in peaks:
+#            y, x = peak
+#            c = plt.Circle((x,y), 2, color='red', linewidth=0.5, fill=False )
+#            ax[11].add_patch( c )
+#
+#        ax[12].imshow( intensity_image > intensity_image_hist[1][threshold_otsu], cmap='gray', interpolation='none' )
+#        #ax[12].imshow( final_filled_hole_mask_filt & (intensity_image < conservative_dilute_mean) )
+
+
         #plt.savefig('test_view_condensates.pdf')
+#        plt.savefig(f'test_view_condensates_{label}.pdf')
         plt.show()
 
     #############
     # calculate condensate properties
     #############
+    # for computing dilute phase: exclude all condensates including those that touch the edges of the cell 
+    # (which are excluded from the final actual condensates)
     condensates_labeled, condensates_properties_dict = get_condensate_properties( condensates,
                                                             image, intensity_image, label,
-                                                            final_filled_hole_mask_filt, plot=plot)
+                                                            final_filled_hole_mask_filt, plot=plot,
+                                                            condensates_for_dilute=condensates_)
 
+    # add the glcm metrics to the condensate properties dict 
+    condensates_properties_dict['glcm_dissim'] = glcm_dissim
+    condensates_properties_dict['glcm_contrast'] = glcm_contrast
+    condensates_properties_dict['glcm_homogeneity'] = glcm_homogeneity
+    condensates_properties_dict['glcm_correlation'] = glcm_correlation
+    condensates_properties_dict['glcm_energy'] = glcm_energy
 
     return (condensates, condensates_labeled, condensates_properties_dict)
 
@@ -1724,6 +1806,7 @@ def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
     dapi_rgb = prepare_png_cellpose( dapi_image )
     #diameter = 87
 
+    #final_nuclei = read( 'nuclei_masks_plate_10_well_C2_test_20230320/nuclei_mask_r03c02f03p01-ch1sk1fk1fl1.tif' )
     final_nuclei = segment_nuclei_phenotype_cellpose( dapi_rgb, cellpose_diameter )
     #final_nuclei = segment_nuclei_phenotype( dapi_image, threshold_initial_guess, smooth_size,
     #                            nuclei_smooth_value, min_size, area_min, area_max, plot)
@@ -1758,6 +1841,11 @@ def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
         'std_condensate_area': [],
         'mean_condensate_eccentricity': [],
         'std_condensate_eccentricity': [],
+        'glcm_energy': [],
+        'glcm_correlation': [],
+        'glcm_dissim': [],
+        'glcm_homogeneity': [],
+        'glcm_contrast': [],
         'cell_img_gfp_file': [],
         'cell_img_dapi_file': [],
         'cell_img_mask_file': [],
@@ -1878,6 +1966,7 @@ def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
 #             total_condensate_area_GFP = 0
 
 #         else:
+        #print( nucleus_image )
         # get condensates 
         (condensates_GFP, condensates_labeled_GFP, 
          condensates_properties_dict_GFP) = get_condensates_general_explicit( nucleus_image,
@@ -1932,6 +2021,16 @@ def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
                 condensates_properties_dict_GFP['mean_condensate_eccentricity'])
         nuclei_dict['std_condensate_eccentricity'].append(
                 condensates_properties_dict_GFP['std_condensate_eccentricity'])
+        nuclei_dict['glcm_contrast'].append( 
+                condensates_properties_dict_GFP['glcm_contrast'])
+        nuclei_dict['glcm_dissim'].append( 
+                condensates_properties_dict_GFP['glcm_dissim'])
+        nuclei_dict['glcm_energy'].append( 
+                condensates_properties_dict_GFP['glcm_energy'])
+        nuclei_dict['glcm_correlation'].append( 
+                condensates_properties_dict_GFP['glcm_correlation'])
+        nuclei_dict['glcm_homogeneity'].append( 
+                condensates_properties_dict_GFP['glcm_homogeneity'])
         nuclei_dict['cell_img_gfp_file'].append( output_fname_gfp )
         nuclei_dict['cell_img_dapi_file'].append( output_fname_dapi )
         nuclei_dict['cell_img_mask_file'].append( output_fname_mask )
