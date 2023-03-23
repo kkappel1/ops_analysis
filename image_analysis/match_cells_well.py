@@ -104,6 +104,7 @@ def get_well_and_tile_num_from_fname_10x( fname ):
 def match_well( plate_num, well_num, out_tag, NUM_PROCESSES, list_of_files_40x, 
                 data_file_10x, data_file_40x, nd2_file_well, match_file_dir, 
                 nuclei_mask_dir_40x, nuclei_mask_dir_10x, phenotype_10x_dir,
+                output_match_dir,
                 THRESHOLD_CC_MATCH=0.30, DIST_THRESHOLD_MATCH=15.0 ):
     
     begin_time = datetime.datetime.now()
@@ -143,6 +144,9 @@ def match_well( plate_num, well_num, out_tag, NUM_PROCESSES, list_of_files_40x,
     match_ratio_min_to_next_thresh = 0.9 
     plot=True
     plot_phenotypes=False
+
+    if not os.path.exists( f'{output_match_dir}/match_info/' ):
+        os.makedirs( f'{output_match_dir}/match_info/' )
     
 
     with multiprocessing.Pool(processes=NUM_PROCESSES) as pool:
@@ -221,17 +225,18 @@ def match_well( plate_num, well_num, out_tag, NUM_PROCESSES, list_of_files_40x,
             well_num_10x, tile_num_10x =  get_well_and_tile_num_from_fname_10x( best_image_match_10x )
             tile_origins_10x.append( sites_to_xy_10x[ tile_num_10x ] )
             plot_tags.append( 'well_' + str(well_num) + '_field_' + str(tile_num_40x) )
-        print( "files_40x_actually_used", files_40x_actually_used )
+        #print( "files_40x_actually_used", files_40x_actually_used )
 
 
         mapping_results = pool.starmap(map_40x_nuclei_to_10x_nuclei_centroid_dist_phenotype, [(nuclei_masks_40x[i],
                                             nuclei_masks_10x[i], phenotype_40x_fnames[i], phenotype_10x_fnames[i], 
                                             tile_origins_10x[i], best_shifts[i], pixel_size_10x,
                                             pixel_size_40x, match_dist_thresh, match_ratio_min_to_next_thresh,
-                                            plot_tags[i], plot, plot_phenotypes) for i in range(len(best_shifts))] )
+                                            plot_tags[i], plot, plot_phenotypes, output_match_dir) for i in range(len(best_shifts))] )
         
         # write the matching stats to a file
-        with open( 'matching_stats_plate_{plate_num}_well_{well_num}_{out_tag}.txt'.format(plate_num=plate_num,well_num=well_num,out_tag=out_tag), 'w') as f:
+        with open( '{output_match_dir}/match_info/matching_stats_plate_{plate_num}_well_{well_num}_{out_tag}.txt'.format(
+            output_match_dir=output_match_dir,plate_num=plate_num,well_num=well_num,out_tag=out_tag), 'w') as f:
             f.write( 'num_matched_nuclei frac_matched_nuclei duplicated_10x_nuclei\n' )
             for map_res in mapping_results:
                 f.write( '%d %0.2f %d\n' %(map_res[1], map_res[2], map_res[3]))
@@ -252,12 +257,12 @@ def match_well( plate_num, well_num, out_tag, NUM_PROCESSES, list_of_files_40x,
 
         plt.subplots( 1,1,figsize=(5,5) )
         plt.scatter( all_dissim_10x, all_dissim_40x, alpha =0.1 )
-        plt.savefig( f'all_dissim_compare_plate{plate_num}_well_{well_num}_{out_tag}.png' )
+        plt.savefig( f'{output_match_dir}/match_info/all_dissim_compare_plate{plate_num}_well_{well_num}_{out_tag}.png' )
         plt.clf()
 
         plt.subplots( 1,1,figsize=(5,5) )
         plt.scatter( all_intensities_10x, all_intensities_40x, alpha =0.1 )
-        plt.savefig( f'all_intensities_compare_plate{plate_num}_well_{well_num}_{out_tag}.png' )
+        plt.savefig( f'{output_match_dir}/match_info/all_intensities_compare_plate{plate_num}_well_{well_num}_{out_tag}.png' )
         plt.clf()
 
 
@@ -306,11 +311,13 @@ if __name__ == '__main__':
         help='threshold for 40x to 10x raw image match' )
     parser.add_argument( '-threshold_dist_match', type=float, default=15.0, 
         help='threshold for distance between actual and expected 40x to 10x match coordinates' )
+    parser.add_argument( '-output_match_dir', required=True,
+        help='directory to save all match output files e.g. process_phenotype/plate_10/')
 
     args = parser.parse_args()
     match_well( args.plate_num, args.well_num, args.out_tag, args.num_proc,
                 args.list_dapi_files_40x, args.data_file_10x, args.data_file_40x,
                 args.nd2_file_well_cycle_1, args.match_file_dir, args.nuclei_mask_dir_40x,
-                args.nuclei_mask_dir_10x, args.phenotype_10x_dir, args.threshold_cc_match,
-                args.threshold_dist_match)
+                args.nuclei_mask_dir_10x, args.phenotype_10x_dir, args.output_match_dir, 
+                args.threshold_cc_match, args.threshold_dist_match)
 

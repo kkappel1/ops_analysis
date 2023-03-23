@@ -283,7 +283,7 @@ def map_40x_nuclei_to_10x_nuclei_centroid_dist_phenotype( nuclei_mask_40x, nucle
                                               pixel_size_40x, DIST_THRESH=15.0,
                                                RATIO_MIN_TO_NEXT_THRESH=0.9,
                                                plot_tag='test_2',
-                                              plot=False, plot_phenotypes=False):
+                                              plot=False, plot_phenotypes=False, output_match_dir=''):
     
     # load the phenotype images
     phenotype_img_40x = read( phenotype_40x_fname )
@@ -484,7 +484,7 @@ def map_40x_nuclei_to_10x_nuclei_centroid_dist_phenotype( nuclei_mask_40x, nucle
             plt.scatter( [centroid_10x[0], centroid_40x[0]], [centroid_10x[1],centroid_40x[1]] )
             plt.text( centroid_10x[0], centroid_10x[1], mindex )
             plt.text( centroid_40x[0], centroid_40x[1], mindex )
-        plt.savefig( "overlay_matches_centroid_{plot_tag}.pdf".format(plot_tag=plot_tag) )
+        plt.savefig( f"{output_match_dir}/match_info/overlay_matches_centroid_{plot_tag}.pdf" )
         plt.clf()
         plt.close()
         

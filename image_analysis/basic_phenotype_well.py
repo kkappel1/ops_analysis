@@ -80,8 +80,8 @@ def phenotype_well( plate_num, well_num, out_tag, output_tif_40x_base_dir, list_
         ffc_dapi = image_analysis.preprocess_phenotype.get_flatfield_correction( list_of_dapi_files )
         ffc_gfp = image_analysis.preprocess_phenotype.get_flatfield_correction( list_of_gfp_files )
 
-        save( f'ffc_dapi_plate_{plate_num}_well_{well_num}_{out_tag}.tif', ffc_dapi )
-        save( f'ffc_gfp_plate_{plate_num}_well_{well_num}_{out_tag}.tif', ffc_gfp )
+        save( f'{output_tif_40x_base_dir}/ffc_files/ffc_dapi_plate_{plate_num}_well_{well_num}_{out_tag}.tif', ffc_dapi )
+        save( f'{output_tif_40x_base_dir}/ffc_files/ffc_gfp_plate_{plate_num}_well_{well_num}_{out_tag}.tif', ffc_gfp )
 
         if not do_ffc:
             ffc_dapi = np.ones_like( ffc_dapi )
