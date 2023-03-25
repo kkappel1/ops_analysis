@@ -355,6 +355,7 @@ def map_40x_nuclei_to_10x_nuclei_centroid_dist_phenotype( nuclei_mask_40x, nucle
                                                     multichannel=False, preserve_range=True)
         except:
             # skip this nucleus
+            print( "skipping nucleus from phenotype_40x_fname", phenotype_40x_fname )
             continue
         rescaled_intensity_image = rescaled_intensity_image.astype( nucleus.intensity_image.dtype )
         scaled_intensity_image = rescaled_intensity_image * scale16to8
