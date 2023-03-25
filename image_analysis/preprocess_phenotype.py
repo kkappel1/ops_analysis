@@ -26,6 +26,9 @@ def get_flatfield_correction( list_of_files ):
 
 
 def apply_flatfield_correction( img, correction_matrix ):
+    # need to take into account any saturated pixels
     corrected = img / correction_matrix
+    saturated_pixels = corrected >= 65535
+    corrected[ saturated_pixels ] = 65535
     corrected = corrected.astype( img.dtype )
     return corrected 
