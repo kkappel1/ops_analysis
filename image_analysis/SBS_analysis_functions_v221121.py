@@ -28,6 +28,7 @@ import math
 from .preprocess_phenotype import *
 from skimage import img_as_ubyte
 from cellpose.models import Cellpose
+import datetime
 
 
 
@@ -995,7 +996,13 @@ def get_condensates_general_explicit( image,
 
     # automatically determine hole threshold
     inverted_image = -1 * intensity_image
-    dark_thresh = filters.threshold_li( inverted_image, initial_guess=-1.)
+    try:
+        dark_thresh = filters.threshold_li( inverted_image, initial_guess=-1.)
+    except:
+        print( "error with threshold li" )
+        print( "save file name:", save_file )
+        print( np.min( inverted_image), np.max(inverted_image) )
+        dark_thresh = filters.threshold_li( inverted_image, initial_guess=np.max(inverted_image)-1.)
 
     hole_mask = intensity_image < -1*dark_thresh
 
@@ -1800,14 +1807,24 @@ def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
     dapi_image = read( fname_dapi )
     gfp_image = read( fname_gfp )
 
+    #save( f'preffc_dapi_well{well_num}_field{tile_num}.tif', dapi_image )
+    #save( f'preffc_gfp_well{well_num}_field{tile_num}.tif', gfp_image )
+
     dapi_image = apply_flatfield_correction( dapi_image, ffc_dapi )
     gfp_image = apply_flatfield_correction( gfp_image, ffc_gfp )
-    
+
+    #save( f'ffc_dapi_well{well_num}_field{tile_num}.tif', dapi_image )
+    #save( f'ffc_gfp_well{well_num}_field{tile_num}.tif', gfp_image )
+
+
     dapi_rgb = prepare_png_cellpose( dapi_image )
     #diameter = 87
 
     #final_nuclei = read( 'nuclei_masks_plate_10_well_C2_test_20230320/nuclei_mask_r03c02f03p01-ch1sk1fk1fl1.tif' )
+    #start_time = datetime.datetime.now()
     final_nuclei = segment_nuclei_phenotype_cellpose( dapi_rgb, cellpose_diameter )
+    #end_time = datetime.datetime.now()
+    #print( "time segmenting nuclei:", end_time - start_time )
     #final_nuclei = segment_nuclei_phenotype( dapi_image, threshold_initial_guess, smooth_size,
     #                            nuclei_smooth_value, min_size, area_min, area_max, plot)
 

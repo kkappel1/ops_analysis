@@ -38,7 +38,7 @@ warnings.filterwarnings("ignore")
 
 
 def phenotype_well( plate_num, well_num, out_tag, output_tif_40x_base_dir, list_dapi_files, 
-        check_match, match_dir, NUM_PROCESSES, do_ffc=True ):
+        check_match, match_dir, NUM_PROCESSES, ffc_file_dapi='', ffc_file_gfp='', do_ffc=True ):
     if check_match: 
         print( "Checking for match files" )
     else:
@@ -76,26 +76,37 @@ def phenotype_well( plate_num, well_num, out_tag, output_tif_40x_base_dir, list_
 
         print( "len(files_and_tiles)", len(files_and_tiles) )
 
-        # get the flatfield correction for each channel
-        ffc_dapi = image_analysis.preprocess_phenotype.get_flatfield_correction( list_of_dapi_files )
-        ffc_gfp = image_analysis.preprocess_phenotype.get_flatfield_correction( list_of_gfp_files )
+        if ffc_file_gfp != '' and ffc_file_dapi != '':
+            print( "reading ffc files" )
+            ffc_dapi = read( ffc_file_dapi )
+            ffc_gfp = read( ffc_file_gfp )
+        else:
+            # get the flatfield correction for each channel
+            ffc_dapi = image_analysis.preprocess_phenotype.get_flatfield_correction( list_of_dapi_files )
+            ffc_gfp = image_analysis.preprocess_phenotype.get_flatfield_correction( list_of_gfp_files )
 
-        save( f'{output_tif_40x_base_dir}/ffc_files/ffc_dapi_plate_{plate_num}_well_{well_num}_{out_tag}.tif', ffc_dapi )
-        save( f'{output_tif_40x_base_dir}/ffc_files/ffc_gfp_plate_{plate_num}_well_{well_num}_{out_tag}.tif', ffc_gfp )
+            save( f'{output_tif_40x_base_dir}/ffc_files/ffc_dapi_plate_{plate_num}_well_{well_num}_{out_tag}.tif', ffc_dapi )
+            save( f'{output_tif_40x_base_dir}/ffc_files/ffc_gfp_plate_{plate_num}_well_{well_num}_{out_tag}.tif', ffc_gfp )
 
         if not do_ffc:
+            print( "overwriting ffcs" )
             ffc_dapi = np.ones_like( ffc_dapi )
             ffc_gfp = np.ones_like( ffc_gfp )
 
+        print( "min/max ffc", np.min( ffc_dapi ), np.max( ffc_dapi ) )
+        print( "min/max ffc", np.min( ffc_gfp ), np.max( ffc_gfp ) )
         # write out dapi, gfp, and mask files for each cell
         # need file_save_dir and field_name
         # use output_tif_40x_base_dir
 
+        start_time_ph = datetime.datetime.now()
         phenotype_results = pool.starmap( prelim_phenotype_phenix_2channel_write_img_files, [(x[0], x[1], ffc_dapi, ffc_gfp, 
                                 well_num, x[2], x[3], min_size, smooth_size, threshold_initial_guess, 
                                 nuclei_smooth_value, area_min, plot_phenotype, area_max, 
                                 condensate_cutoff_intensity, THRESH_STDS, use_cellpose, 
                                 cellpose_diameter) for x in files_and_tiles])
+        end_time_ph = datetime.datetime.now()
+        print( "time phenotyping mapped:", end_time_ph - start_time_ph )
         nuclei_mask_outdir = f'nuclei_masks_plate_{plate_num}_well_{well_num}_{out_tag}'
         if not os.path.exists( nuclei_mask_outdir ):
             os.makedirs( nuclei_mask_outdir )
@@ -131,6 +142,8 @@ if __name__ == '__main__':
     parser.add_argument( '-no_ffc', default=False, action='store_true', 
             help='Do not do flatfield correction')
     parser.add_argument( '-match_dir', type=str, default='', help='directory that contains match files' )
+    parser.add_argument( '-ffc_file_dapi', type=str, default='', help='ffc file for dapi, optional' )
+    parser.add_argument( '-ffc_file_gfp', type=str, default='', help='ffc file for gfp, optional' )
     parser.add_argument( '-list_dapi_files', nargs='+', help="List of all dapi files to analyze" )
     parser.add_argument( '-num_proc', type=int, default=1, help="number of processors to run on" )
     args = parser.parse_args()
@@ -140,4 +153,5 @@ if __name__ == '__main__':
         do_ffc = True
     phenotype_well( args.plate_num, args.well_num, args.out_tag,
                 args.output_tif_40x_base_dir, args.list_dapi_files, 
-                args.check_for_match_file, args.match_dir, args.num_proc, do_ffc )
+                args.check_for_match_file, args.match_dir, args.num_proc, 
+                args.ffc_file_dapi, args.ffc_file_gfp, do_ffc )

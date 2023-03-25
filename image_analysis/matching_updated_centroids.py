@@ -343,16 +343,19 @@ def map_40x_nuclei_to_10x_nuclei_centroid_dist_phenotype( nuclei_mask_40x, nucle
         centroid_x = tile_origin_40x_x + centroid[1]*pixel_size_40x
         centroid_y = tile_origin_40x_y + (image_size_40x - centroid[0])*pixel_size_40x
 
-        nucleii_to_centroids_40x[nucleus.label] = [centroid_x, centroid_y]
 
         # get the mean gfp intensity of the cell
         mean_intensity = nucleus.mean_intensity
 
         # GLCM dissimilarity calculation
         # rescale the intensity image to match 10x size
-        rescaled_intensity_image = skimage.transform.rescale( nucleus.intensity_image,
+        try:
+            rescaled_intensity_image = skimage.transform.rescale( nucleus.intensity_image,
                                                     scale_factor, anti_aliasing=False, 
                                                     multichannel=False, preserve_range=True)
+        except:
+            # skip this nucleus
+            continue
         rescaled_intensity_image = rescaled_intensity_image.astype( nucleus.intensity_image.dtype )
         scaled_intensity_image = rescaled_intensity_image * scale16to8
         scaled_intensity_image = np.round( scaled_intensity_image )
@@ -364,6 +367,7 @@ def map_40x_nuclei_to_10x_nuclei_centroid_dist_phenotype( nuclei_mask_40x, nucle
         cells_to_phenotype_40x[ nucleus.label ] = [mean_intensity, glcm_dissim]
         dict_40x_label_to_pheno_img[ nucleus.label ] = nucleus.intensity_image
         cells_to_intensity_40x[ nucleus.label ] = [mean_intensity]
+        nucleii_to_centroids_40x[nucleus.label] = [centroid_x, centroid_y]
 
         
     dict_40x_nuclei_to_10x_nuclei = {}
