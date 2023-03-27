@@ -1002,7 +1002,8 @@ def get_condensates_general_explicit( image,
         print( "error with threshold li" )
         print( "save file name:", save_file )
         print( np.min( inverted_image), np.max(inverted_image) )
-        dark_thresh = filters.threshold_li( inverted_image, initial_guess=np.max(inverted_image)-1.)
+        dark_thresh = filters.threshold_li( inverted_image, initial_guess=np.max(inverted_image)-0.5)
+        #dark_thresh = filters.threshold_li( inverted_image, initial_guess=np.max(inverted_image)-1.)
 
     hole_mask = intensity_image < -1*dark_thresh
 
