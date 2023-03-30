@@ -38,7 +38,8 @@ warnings.filterwarnings("ignore")
 
 
 def phenotype_well( plate_num, well_num, out_tag, output_tif_40x_base_dir, list_dapi_files, 
-        check_match, match_dir, NUM_PROCESSES, ffc_file_dapi='', ffc_file_gfp='', do_ffc=True ):
+        check_match, match_dir, NUM_PROCESSES, ffc_file_dapi='', ffc_file_gfp='', do_ffc=True,
+        nuclei_masks_dir=''):
     if check_match: 
         print( "Checking for match files" )
     else:
@@ -57,7 +58,7 @@ def phenotype_well( plate_num, well_num, out_tag, output_tif_40x_base_dir, list_
         use_cellpose = True
         cellpose_diameter =87
     
-        dict_40x_nuclei_masks = {}
+        #dict_40x_nuclei_masks = {}
         full_df_nuclei = pd.DataFrame()
         files_and_tiles = []
         list_of_dapi_files = []
@@ -72,7 +73,11 @@ def phenotype_well( plate_num, well_num, out_tag, output_tif_40x_base_dir, list_
             tile_num = get_field_num_from_phenix_name( f )
             file_save_dir = '{output_tif_40x_base_dir}/CELL_IMAGES_{out_tag}/well_{well_num}/field_{tile_num}/'.format(
                     output_tif_40x_base_dir=output_tif_40x_base_dir,out_tag=out_tag,well_num=well_num,tile_num=tile_num)
-            files_and_tiles.append( [f, gfp_file, tile_num, file_save_dir] )
+            if nuclei_masks_dir != '':
+                nuclei_mask_file = f'{nuclei_masks_dir}/nuclei_mask_{base_fname}.tif'
+                files_and_tiles.append( [f, gfp_file, tile_num, file_save_dir, nuclei_mask_file] )
+            else:
+                files_and_tiles.append( [f, gfp_file, tile_num, file_save_dir] )
 
         print( "len(files_and_tiles)", len(files_and_tiles) )
 
@@ -100,25 +105,38 @@ def phenotype_well( plate_num, well_num, out_tag, output_tif_40x_base_dir, list_
         # use output_tif_40x_base_dir
 
         start_time_ph = datetime.datetime.now()
-        phenotype_results = pool.starmap( prelim_phenotype_phenix_2channel_write_img_files, [(x[0], x[1], ffc_dapi, ffc_gfp, 
+        if nuclei_masks_dir != '':
+            print( "running with nuclei masks" )
+            phenotype_results = pool.starmap( prelim_phenotype_phenix_2channel_write_img_files, [(x[0], x[1], ffc_dapi, ffc_gfp, 
+                                well_num, x[2], x[3], min_size, smooth_size, threshold_initial_guess, 
+                                nuclei_smooth_value, area_min, plot_phenotype, area_max, 
+                                condensate_cutoff_intensity, THRESH_STDS, use_cellpose, 
+                                cellpose_diameter, x[4]) for x in files_and_tiles])
+        else:
+            phenotype_results = pool.starmap( prelim_phenotype_phenix_2channel_write_img_files, [(x[0], x[1], ffc_dapi, ffc_gfp, 
                                 well_num, x[2], x[3], min_size, smooth_size, threshold_initial_guess, 
                                 nuclei_smooth_value, area_min, plot_phenotype, area_max, 
                                 condensate_cutoff_intensity, THRESH_STDS, use_cellpose, 
                                 cellpose_diameter) for x in files_and_tiles])
+        
+
         end_time_ph = datetime.datetime.now()
         print( "time phenotyping mapped:", end_time_ph - start_time_ph )
-        nuclei_mask_outdir = f'nuclei_masks_plate_{plate_num}_well_{well_num}_{out_tag}'
-        if not os.path.exists( nuclei_mask_outdir ):
-            os.makedirs( nuclei_mask_outdir )
+
+        if nuclei_masks_dir == '':
+            nuclei_mask_outdir = f'nuclei_masks_plate_{plate_num}_well_{well_num}_{out_tag}'
+            if not os.path.exists( nuclei_mask_outdir ):
+                os.makedirs( nuclei_mask_outdir )
+            for i, result in enumerate(phenotype_results):
+                fname = files_and_tiles[i][0]
+                base_fname = fname.split('/')[-1].replace('.tiff','.tif')
+                nuclei_mask = result[1]
+                #dict_40x_nuclei_masks[fname] = nuclei_mask
+                # write the nuclei mask out
+                output_nuclei_mask_fname = f'{nuclei_mask_outdir}/nuclei_mask_{base_fname}'
+                save( output_nuclei_mask_fname, nuclei_mask )
         for i, result in enumerate(phenotype_results):
-            fname = files_and_tiles[i][0]
-            base_fname = fname.split('/')[-1].replace('.tiff','.tif')
-            nuclei_mask = result[1]
             df_nuclei = result[0]
-            dict_40x_nuclei_masks[fname] = nuclei_mask
-            # write the nuclei mask out
-            output_nuclei_mask_fname = f'{nuclei_mask_outdir}/nuclei_mask_{base_fname}'
-            save( output_nuclei_mask_fname, nuclei_mask )
             full_df_nuclei = full_df_nuclei.append( df_nuclei )
 
         # write the full_df_nuclei out to a file
@@ -142,6 +160,7 @@ if __name__ == '__main__':
     parser.add_argument( '-no_ffc', default=False, action='store_true', 
             help='Do not do flatfield correction')
     parser.add_argument( '-match_dir', type=str, default='', help='directory that contains match files' )
+    parser.add_argument( '-nuclei_masks_dir', type=str, default='', help='directory that contains nuclei masks' )
     parser.add_argument( '-ffc_file_dapi', type=str, default='', help='ffc file for dapi, optional' )
     parser.add_argument( '-ffc_file_gfp', type=str, default='', help='ffc file for gfp, optional' )
     parser.add_argument( '-list_dapi_files', nargs='+', help="List of all dapi files to analyze" )
@@ -154,4 +173,4 @@ if __name__ == '__main__':
     phenotype_well( args.plate_num, args.well_num, args.out_tag,
                 args.output_tif_40x_base_dir, args.list_dapi_files, 
                 args.check_for_match_file, args.match_dir, args.num_proc, 
-                args.ffc_file_dapi, args.ffc_file_gfp, do_ffc )
+                args.ffc_file_dapi, args.ffc_file_gfp, do_ffc, nuclei_masks_dir )

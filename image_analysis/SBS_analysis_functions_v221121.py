@@ -831,6 +831,14 @@ def prepare_png_cellpose( dapi_image, save_png=False ):
         skimage.io.imsave( 'cellpose_input.png', rgb_img )
     return rgb_img
 
+def segment_nuclei_phenotype_cellpose_from_model( model_nuclei, rgb, diameter, gpu=False ):
+    nuclei, _, _, _ = model_nuclei.eval( rgb, channels=[3,0], diameter=diameter )
+
+    nuclei = skimage.segmentation.clear_border( nuclei )
+
+    return nuclei
+    
+
 def segment_nuclei_phenotype_cellpose( rgb, diameter, gpu=False ):
 
     model_nuclei = Cellpose( model_type='nuclei', gpu=gpu )
@@ -1801,7 +1809,7 @@ def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
                         smooth_size=5, threshold_initial_guess=500, 
                         nuclei_smooth_value=20, area_min=5000, plot=False,
                         area_max=20000, condensate_cutoff_intensity=2000,
-                        THRESH_STDS=5,cellpose=True,cellpose_diameter=87):
+                        THRESH_STDS=5,cellpose=True,cellpose_diameter=87, nuclei_mask_file=''):
     ##################
     # segment nuclei from dapi image
     ##################
@@ -1817,17 +1825,22 @@ def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
     #save( f'ffc_dapi_well{well_num}_field{tile_num}.tif', dapi_image )
     #save( f'ffc_gfp_well{well_num}_field{tile_num}.tif', gfp_image )
 
+    if nuclei_mask_file != '':
+        # get the nuclei mask from file
+        final_nuclei = read( nuclei_mask_file )
 
-    dapi_rgb = prepare_png_cellpose( dapi_image )
-    #diameter = 87
+    else:
 
-    #final_nuclei = read( 'nuclei_masks_plate_10_well_C2_test_20230320/nuclei_mask_r03c02f03p01-ch1sk1fk1fl1.tif' )
-    #start_time = datetime.datetime.now()
-    final_nuclei = segment_nuclei_phenotype_cellpose( dapi_rgb, cellpose_diameter )
-    #end_time = datetime.datetime.now()
-    #print( "time segmenting nuclei:", end_time - start_time )
-    #final_nuclei = segment_nuclei_phenotype( dapi_image, threshold_initial_guess, smooth_size,
-    #                            nuclei_smooth_value, min_size, area_min, area_max, plot)
+        dapi_rgb = prepare_png_cellpose( dapi_image )
+        #diameter = 87
+    
+        #final_nuclei = read( 'nuclei_masks_plate_10_well_C2_test_20230320/nuclei_mask_r03c02f03p01-ch1sk1fk1fl1.tif' )
+        #start_time = datetime.datetime.now()
+        final_nuclei = segment_nuclei_phenotype_cellpose( dapi_rgb, cellpose_diameter )
+        #end_time = datetime.datetime.now()
+        #print( "time segmenting nuclei:", end_time - start_time )
+        #final_nuclei = segment_nuclei_phenotype( dapi_image, threshold_initial_guess, smooth_size,
+        #                            nuclei_smooth_value, min_size, area_min, area_max, plot)
 
 
     ##################
