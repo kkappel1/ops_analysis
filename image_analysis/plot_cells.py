@@ -5,7 +5,7 @@ import numpy as np
 
 
 def plot_example_cells( df_data, barcodes, plot_save_name, NUM_IMGS=30, 
-        mean_intensity_cutoff=150., vmax=3000. ):
+        mean_intensity_cutoff=150., vmax=3000., descriptions=[] ):
     ################## plot some example cells:
     begin_time = datetime.datetime.now()
 
@@ -15,6 +15,7 @@ def plot_example_cells( df_data, barcodes, plot_save_name, NUM_IMGS=30,
         cells_with_barcode = df_data[(df_data['cell_barcode_0']==barcode) &
                                         (df_data['cell_barcode_1'].isnull())]
         img_num = 0
+        print( "plotting", barcode )
         for index, cell in cells_with_barcode.iterrows():
             if img_num >(NUM_IMGS-1): break
             # get the gfp image
@@ -36,8 +37,13 @@ def plot_example_cells( df_data, barcodes, plot_save_name, NUM_IMGS=30,
                                             (int(pad_y_size/2),int(pad_y_size/2))],
                                             'constant', constant_values=0)
 
-            ax[num][img_num].imshow( padded_image, cmap='gray', vmin=0, vmax=3000 )
-            ax[num][img_num].set_title(barcode,fontsize=8,color='blue')
+            ax[num][img_num].imshow( padded_image, cmap='gray', vmin=0, vmax=vmax )
+            if len(descriptions) > 0:
+                ax[num][img_num].set_title(descriptions[num],fontsize=2,color='blue')
+            else:
+                ax[num][img_num].set_title(barcode,fontsize=8,color='blue')
+            ax[num][img_num].text(0.1,0.9,cell['num_condensates_GFP'],fontsize=6,color='blue', transform=ax[num][img_num].transAxes)
+            ax[num][img_num].text(0.1,0.1,cell['frac_gfp_in_cond_GFP'],fontsize=6,color='blue' ,transform=ax[num][img_num].transAxes)
             img_num += 1
 
     # turn all axes off
