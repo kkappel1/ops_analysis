@@ -47,7 +47,8 @@ def apply_SNAP_intensity_correction( param_file, data_df_input):
 
     return data_df
 
-def load_data_sublib_and_correct_SNAP( requested_sublib, requested_rep, SNAP_correction_param_file_dict ):
+def load_data_sublib_and_correct_SNAP( requested_sublib, requested_rep, SNAP_correction_param_file_dict,
+        base_dir=''):
     all_data_sublib = pd.DataFrame()
     for plate in plates:
         for well in wells:
@@ -56,14 +57,22 @@ def load_data_sublib_and_correct_SNAP( requested_sublib, requested_rep, SNAP_cor
             sublib = sublib_rep.split('_')[0]
             rep = int( sublib_rep.split('_')[1] )
             if (sublib == requested_sublib) and (rep == requested_rep):
-                data_file = f'reanalyze_plate{plate}/all_output_data_plate_{plate}_well_{well}_analyze20230323_no_duplicates_filter_matches.csv'
+                if base_dir != '':
+                    data_file = f'{base_dir}/reanalyze_plate{plate}/all_output_data_plate_{plate}_well_{well}_analyze20230323_no_duplicates_filter_matches.csv'
+                else:
+                    data_file = f'reanalyze_plate{plate}/all_output_data_plate_{plate}_well_{well}_analyze20230323_no_duplicates_filter_matches.csv'
                 data_plate_well = pd.read_csv( data_file )
                 data_plate_well['plate'] = plate
                 data_plate_well['replicate'] = rep
                 # edit the file path for cell images
-                data_plate_well['cell_img_gfp_file'] = f'reanalyze_plate{plate}/' + data_plate_well['cell_img_gfp_file']
-                data_plate_well['cell_img_mask_file'] = f'reanalyze_plate{plate}/' + data_plate_well['cell_img_mask_file']
-                data_plate_well['cell_img_dapi_file'] = f'reanalyze_plate{plate}/' + data_plate_well['cell_img_dapi_file']
+                if base_dir != '':
+                    data_plate_well['cell_img_gfp_file'] = f'{base_dir}/reanalyze_plate{plate}/' + data_plate_well['cell_img_gfp_file']
+                    data_plate_well['cell_img_mask_file'] = f'{base_dir}/reanalyze_plate{plate}/' + data_plate_well['cell_img_mask_file']
+                    data_plate_well['cell_img_dapi_file'] = f'{base_dir}/reanalyze_plate{plate}/' + data_plate_well['cell_img_dapi_file']
+                else:
+                    data_plate_well['cell_img_gfp_file'] = f'reanalyze_plate{plate}/' + data_plate_well['cell_img_gfp_file']
+                    data_plate_well['cell_img_mask_file'] = f'reanalyze_plate{plate}/' + data_plate_well['cell_img_mask_file']
+                    data_plate_well['cell_img_dapi_file'] = f'reanalyze_plate{plate}/' + data_plate_well['cell_img_dapi_file']
                 if plate_well in SNAP_correction_param_file_dict.keys():
                     print( f"Correcting SNAP intensity in plate {plate} well {well}" )
                     SNAP_correction_param_file = SNAP_correction_param_file_dict[plate_well]
