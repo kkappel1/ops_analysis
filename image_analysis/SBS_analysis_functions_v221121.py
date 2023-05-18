@@ -2233,6 +2233,7 @@ def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
         'cell_img_gfp_file': [],
         'cell_img_dapi_file': [],
         'cell_img_mask_file': [],
+        'corr_GFP_dapi': [],
         
     }
 
@@ -2242,7 +2243,7 @@ def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
         return df_nuclei, final_nuclei
 
     properties_dapi = skimage.measure.regionprops_table( final_nuclei, intensity_image=dapi_image,
-                                        properties=('label','mean_intensity'))
+                                        properties=('label','mean_intensity','intensity_image'))
 
     #print( well_num, tile_num, fname_dapi, fname_gfp )
     properties_gfp = skimage.measure.regionprops_table( final_nuclei, intensity_image=gfp_image, 
@@ -2254,6 +2255,9 @@ def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
         nucleus_area = properties_gfp['area'][nucleus_index]
         nucleus_label = properties_gfp['label'][nucleus_index]
         mean_dapi_intensity = properties_dapi['mean_intensity'][nucleus_index]
+
+        region_image_dapi = properties_dapi['intensity_image'][nucleus_index]
+        region_pixels_dapi = region_image_dapi[nucleus_image]
     
         mean_intensity_GFP = properties_gfp['mean_intensity'][nucleus_index]
         max_intensity_GFP = properties_gfp['max_intensity'][nucleus_index]
@@ -2261,6 +2265,8 @@ def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
         region_pixels_GFP = region_image_GFP[nucleus_image]
         std_intensity_GFP = np.std( region_pixels_GFP )
         total_intensity_GFP = mean_intensity_GFP * nucleus_area
+
+        correlation_GFP_dapi = pearsonr( region_pixels_GFP, region_pixels_dapi )[0] 
 
         # write images to files
         # the dapi image: nucleus_image = properties_gfp['image'][nucleus_index] (this is already masked though)
@@ -2418,6 +2424,7 @@ def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
         nuclei_dict['cell_img_gfp_file'].append( output_fname_gfp )
         nuclei_dict['cell_img_dapi_file'].append( output_fname_dapi )
         nuclei_dict['cell_img_mask_file'].append( output_fname_mask )
+        nuclei_dict['corr_GFP_dapi'].append( correlation_GFP_dapi )
         
 
     df_nuclei = pd.DataFrame(data=nuclei_dict)
