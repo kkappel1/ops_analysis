@@ -29,6 +29,7 @@ from .preprocess_phenotype import *
 from skimage import img_as_ubyte
 from cellpose.models import Cellpose
 import datetime
+from scipy.stats import pearsonr
 
 
 
@@ -1237,7 +1238,9 @@ def get_condensate_overlap( condensates_1, condensates_2, plot=True ):
 
 def phenotype_phenix_4channel_NPM_coilin( fname_dapi, fname_gfp, fname_npm, fname_coilin,
                                         ffc_dapi, ffc_gfp, ffc_npm, ffc_coilin,
-                                         well_num, tile_num, min_size=1000,
+                                         well_num, tile_num, 
+                                         file_save_dir,
+                                         min_size=1000,
                         smooth_size=5, threshold_initial_guess=500,
                         nuclei_smooth_value=20, area_min=5000, plot=False,
                         area_max=20000, condensate_cutoff_intensity=2000,
@@ -1358,6 +1361,10 @@ def phenotype_phenix_4channel_NPM_coilin( fname_dapi, fname_gfp, fname_npm, fnam
         'cell_img_npm_file': [],
         'cell_img_coilin_file': [],
         'cell_img_mask_file': [],
+        'corr_GFP_coilin': [],
+        'corr_GFP_npm': [],
+        'corr_npm_coilin': [],
+        'corr_GFP_dapi': [],
 
     }
     num_nuclei = len(np.unique(final_nuclei) ) -1
@@ -1367,7 +1374,7 @@ def phenotype_phenix_4channel_NPM_coilin( fname_dapi, fname_gfp, fname_npm, fnam
 
 
     properties_dapi = skimage.measure.regionprops_table( final_nuclei, intensity_image=dapi_image,
-                                        properties=('label','mean_intensity'))
+                                        properties=('label','mean_intensity','intensity_image'))
     properties_gfp = skimage.measure.regionprops_table( final_nuclei, intensity_image=gfp_image,
                                         properties=('label','mean_intensity','max_intensity','intensity_image',
                                                    'image','area','bbox'))
@@ -1383,6 +1390,9 @@ def phenotype_phenix_4channel_NPM_coilin( fname_dapi, fname_gfp, fname_npm, fnam
         nucleus_area = properties_gfp['area'][nucleus_index]
         nucleus_label = properties_gfp['label'][nucleus_index]
         mean_dapi_intensity = properties_dapi['mean_intensity'][nucleus_index]
+
+        region_image_dapi = properties_dapi['intensity_image'][nucleus_index]
+        region_pixels_dapi = region_image_dapi[nucleus_image]
 
         mean_intensity_GFP = properties_gfp['mean_intensity'][nucleus_index]
         max_intensity_GFP = properties_gfp['max_intensity'][nucleus_index]
@@ -1404,6 +1414,11 @@ def phenotype_phenix_4channel_NPM_coilin( fname_dapi, fname_gfp, fname_npm, fnam
         region_pixels_coilin = region_image_coilin[nucleus_image]
         std_intensity_coilin = np.std( region_pixels_coilin )
         total_intensity_coilin = mean_intensity_coilin * nucleus_area
+
+        correlation_GFP_dapi = pearsonr( region_pixels_GFP, region_pixels_dapi )[0]
+        correlation_GFP_coilin = pearsonr( region_pixels_GFP, region_pixels_coilin )[0]
+        correlation_GFP_npm = pearsonr( region_pixels_GFP, region_pixels_npm )[0]
+        correlation_npm_coilin = pearsonr( region_pixels_npm, region_pixels_coilin )[0]
 
         bbox = (properties_gfp['bbox-0'][nucleus_index],
                 properties_gfp['bbox-1'][nucleus_index],
@@ -1665,13 +1680,20 @@ def phenotype_phenix_4channel_NPM_coilin( fname_dapi, fname_gfp, fname_npm, fnam
         nuclei_dict['cell_img_coilin_file'].append( output_fname_coilin )
         nuclei_dict['cell_img_dapi_file'].append( output_fname_dapi )
         nuclei_dict['cell_img_mask_file'].append( output_fname_mask )
+        nuclei_dict['corr_GFP_npm'].append( correlation_GFP_npm )
+        nuclei_dict['corr_GFP_coilin'].append( correlation_GFP_coilin )
+        nuclei_dict['corr_npm_coilin'].append( correlation_npm_coilin )
+        nuclei_dict['corr_GFP_dapi'].append( correlation_GFP_dapi )
+
 
     df_nuclei = pd.DataFrame(data=nuclei_dict)
     return df_nuclei, final_nuclei
 
 def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname_srrm2,
                                          ffc_dapi, ffc_gfp, ffc_pml, ffc_srrm2,
-                                         well_num, tile_num, min_size=1000, 
+                                         well_num, tile_num, 
+                                         file_save_dir,
+                                         min_size=1000, 
                         smooth_size=5, threshold_initial_guess=500, 
                         nuclei_smooth_value=20, area_min=5000, plot=False,
                         area_max=20000, condensate_cutoff_intensity=2000,
@@ -1796,6 +1818,10 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
         'cell_img_pml_file': [],
         'cell_img_srrm2_file': [],
         'cell_img_mask_file': [],
+        'corr_GFP_pml': [],
+        'corr_GFP_srrm2': [],
+        'corr_pml_srrm2': [],
+        'corr_GFP_dapi': [],
         
     }
     num_nuclei = len(np.unique(final_nuclei) ) -1
@@ -1804,7 +1830,7 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
         return df_nuclei, final_nuclei
     
     properties_dapi = skimage.measure.regionprops_table( final_nuclei, intensity_image=dapi_image,
-                                        properties=('label','mean_intensity'))
+                                        properties=('label','mean_intensity','intensity_image'))
     properties_gfp = skimage.measure.regionprops_table( final_nuclei, intensity_image=gfp_image, 
                                         properties=('label','mean_intensity','max_intensity','intensity_image',
                                                    'image','area','bbox'))
@@ -1821,6 +1847,9 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
         nucleus_label = properties_gfp['label'][nucleus_index]
         mean_dapi_intensity = properties_dapi['mean_intensity'][nucleus_index]
     
+        region_image_dapi = properties_dapi['intensity_image'][nucleus_index]
+        region_pixels_dapi = region_image_dapi[nucleus_image]
+
         mean_intensity_GFP = properties_gfp['mean_intensity'][nucleus_index]
         max_intensity_GFP = properties_gfp['max_intensity'][nucleus_index]
         region_image_GFP = properties_gfp['intensity_image'][nucleus_index]
@@ -1841,6 +1870,12 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
         region_pixels_srrm2 = region_image_srrm2[nucleus_image]
         std_intensity_srrm2 = np.std( region_pixels_srrm2 )
         total_intensity_srrm2 = mean_intensity_srrm2 * nucleus_area
+
+        correlation_GFP_pml = pearsonr( region_pixels_GFP, region_pixels_pml )[0]
+        correlation_GFP_srrm2 = pearsonr( region_pixels_GFP, region_pixels_srrm2 )[0]
+        correlation_pml_srrm2 = pearsonr( region_pixels_pml, region_pixels_srrm2 )[0]
+        correlation_GFP_dapi = pearsonr( region_pixels_GFP, region_pixels_dapi )[0]
+
 
         bbox = (properties_gfp['bbox-0'][nucleus_index],
                 properties_gfp['bbox-1'][nucleus_index],
@@ -2088,7 +2123,7 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
                 condensates_properties_dict_srrm2['mean_condensate_eccentricity'])
         nuclei_dict['std_condensate_eccentricity_srrm2'].append(
                 condensates_properties_dict_srrm2['std_condensate_eccentricity'])
-        nuclei_dict['glcm_contrast_srrm'].append(
+        nuclei_dict['glcm_contrast_srrm2'].append(
                 condensates_properties_dict_srrm2['glcm_contrast'])
         nuclei_dict['glcm_dissim_srrm2'].append(
                 condensates_properties_dict_srrm2['glcm_dissim'])
@@ -2111,6 +2146,10 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
         nuclei_dict['cell_img_srrm2_file'].append( output_fname_srrm2 )
         nuclei_dict['cell_img_dapi_file'].append( output_fname_dapi )
         nuclei_dict['cell_img_mask_file'].append( output_fname_mask )
+        nuclei_dict['corr_GFP_pml'].append( correlation_GFP_pml )
+        nuclei_dict['corr_GFP_srrm2'].append( correlation_GFP_srrm2 )
+        nuclei_dict['corr_pml_srrm2'].append( correlation_pml_srrm2 )
+        nuclei_dict['corr_GFP_dapi'].append( correlation_GFP_dapi )
 
 
     df_nuclei = pd.DataFrame(data=nuclei_dict)
@@ -2602,7 +2641,7 @@ def plot_example_cells_many( cells_with_barcode, title, save_name, min_intensity
             # alternatively pad image
             pad_x_size = max(0, 185 - np.shape(nucleus.intensity_image)[0])
             pad_y_size = max(0, 185 - np.shape(nucleus.intensity_image)[1])
-            padded_image = skimage.util.pad( nucleus.intensity_image, [(int(pad_x_size/2),int(pad_x_size/2)), (int(pad_y_size/2),int(pad_y_size/2))],
+            padded_image = np.pad( nucleus.intensity_image, [(int(pad_x_size/2),int(pad_x_size/2)), (int(pad_y_size/2),int(pad_y_size/2))],
                                             'constant', constant_values=0)
 
             ax[row_index][col_index].set_axis_off()
@@ -2690,7 +2729,7 @@ def plot_example_cells_4channel_many( cells_with_barcode, title, save_name, min_
             # alternatively pad image
             pad_x_size = max(0, 185 - np.shape(nucleus.intensity_image)[0])
             pad_y_size = max(0, 185 - np.shape(nucleus.intensity_image)[1])
-            padded_image = skimage.util.pad( nucleus.intensity_image, [(int(pad_x_size/2),int(pad_x_size/2)), (int(pad_y_size/2),int(pad_y_size/2))],
+            padded_image = np.pad( nucleus.intensity_image, [(int(pad_x_size/2),int(pad_x_size/2)), (int(pad_y_size/2),int(pad_y_size/2))],
                                             'constant', constant_values=0)
 
             ax[row_index][col_index].set_axis_off()
@@ -2700,7 +2739,7 @@ def plot_example_cells_4channel_many( cells_with_barcode, title, save_name, min_
             # alternatively pad image
             pad_x_size = max(0, 185 - np.shape(nucleus.intensity_image)[0])
             pad_y_size = max(0, 185 - np.shape(nucleus.intensity_image)[1])
-            padded_image = skimage.util.pad( nucleus.intensity_image, [(int(pad_x_size/2),int(pad_x_size/2)), (int(pad_y_size/2),int(pad_y_size/2))],
+            padded_image = np.pad( nucleus.intensity_image, [(int(pad_x_size/2),int(pad_x_size/2)), (int(pad_y_size/2),int(pad_y_size/2))],
                                             'constant', constant_values=0)
 
             ax[row_index][col_index].set_axis_off()
@@ -2711,7 +2750,7 @@ def plot_example_cells_4channel_many( cells_with_barcode, title, save_name, min_
             # alternatively pad image
             pad_x_size = max(0, 185 - np.shape(nucleus.intensity_image)[0])
             pad_y_size = max(0, 185 - np.shape(nucleus.intensity_image)[1])
-            padded_image = skimage.util.pad( nucleus.intensity_image, [(int(pad_x_size/2),int(pad_x_size/2)), (int(pad_y_size/2),int(pad_y_size/2))],
+            padded_image = np.pad( nucleus.intensity_image, [(int(pad_x_size/2),int(pad_x_size/2)), (int(pad_y_size/2),int(pad_y_size/2))],
                                             'constant', constant_values=0)
 
             ax[row_index][col_index].set_axis_off()
