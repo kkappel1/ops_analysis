@@ -1684,9 +1684,24 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
     gfp_image = read( fname_gfp )
     pml_image = read( fname_pml )
     srrm2_image = read( fname_srrm2 )
+
+    # apply flatfield correction
+    dapi_image = apply_flatfield_correction( dapi_image, ffc_dapi )
+    gfp_image = apply_flatfield_correction( gfp_image, ffc_gfp )
+    pml_image = apply_flatfield_correction( pml_image, ffc_pml )
+    srrm2_image = apply_flatfield_correction( srrm2_image, ffc_srrm2 )
     
-    final_nuclei = segment_nuclei_phenotype( dapi_image, threshold_initial_guess, smooth_size,
-                                nuclei_smooth_value, min_size, area_min, area_max, plot)
+    if nuclei_mask_file != '':
+        final_nuclei = read( nuclei_mask_file )
+    else:
+    
+        if cellpose:
+            dapi_rgb = prepare_png_cellpose( dapi_image )
+            final_nuclei = segment_nuclei_phenotype_cellpose( dapi_rgb, cellpose_diameter )
+        else:
+            final_nuclei = segment_nuclei_phenotype( dapi_image, threshold_initial_guess, smooth_size,
+                        nuclei_smooth_value, min_size, area_min, area_max, plot)
+
 
     ##################
     # go through the nuclei and try to find condensates, calculate relevant properties
@@ -1713,6 +1728,15 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
         'total_gfp_intensity_GFP': [],
         'frac_gfp_in_cond_GFP': [],
         'total_cond_area_GFP': [],
+        'mean_condensate_area': [],
+        'std_condensate_area': [],
+        'mean_condensate_eccentricity': [],
+        'std_condensate_eccentricity': [],
+        'glcm_energy': [],
+        'glcm_correlation': [],
+        'glcm_dissim': [],
+        'glcm_homogeneity': [],
+        'glcm_contrast': [],
         
         'mean_GFP_intensity_pml': [],
         'std_GFP_intensity_pml': [],
@@ -1727,6 +1751,15 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
         'total_gfp_intensity_pml': [],
         'frac_gfp_in_cond_pml': [],
         'total_cond_area_pml': [],
+        'mean_condensate_area_pml': [],
+        'std_condensate_area_pml': [],
+        'mean_condensate_eccentricity_pml': [],
+        'std_condensate_eccentricity_pml': [],
+        'glcm_energy_pml': [],
+        'glcm_correlation_pml': [],
+        'glcm_dissim_pml': [],
+        'glcm_homogeneity_pml': [],
+        'glcm_contrast_pml': [],
         
         'mean_GFP_intensity_srrm2': [],
         'std_GFP_intensity_srrm2': [],
@@ -1741,6 +1774,15 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
         'total_gfp_intensity_srrm2': [],
         'frac_gfp_in_cond_srrm2': [],
         'total_cond_area_srrm2': [],
+        'mean_condensate_area_srrm2': [],
+        'std_condensate_area_srrm2': [],
+        'mean_condensate_eccentricity_srrm2': [],
+        'std_condensate_eccentricity_srrm2': [],
+        'glcm_energy_srrm2': [],
+        'glcm_correlation_srrm2': [],
+        'glcm_dissim_srrm2': [],
+        'glcm_homogeneity_srrm2': [],
+        'glcm_contrast_srrm2': [],
         
         'overlap_area_gfp_pml': [],
         'fraction_gfp_pml_overlap': [],
@@ -1748,6 +1790,12 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
         'fraction_gfp_srrm2_overlap': [],
         'overlap_area_srrm2_pml': [],
         'fraction_srrm2_pml_overlap': [],
+
+        'cell_img_gfp_file': [],
+        'cell_img_dapi_file': [],
+        'cell_img_pml_file': [],
+        'cell_img_srrm2_file': [],
+        'cell_img_mask_file': [],
         
     }
     num_nuclei = len(np.unique(final_nuclei) ) -1
@@ -1759,13 +1807,13 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
                                         properties=('label','mean_intensity'))
     properties_gfp = skimage.measure.regionprops_table( final_nuclei, intensity_image=gfp_image, 
                                         properties=('label','mean_intensity','max_intensity','intensity_image',
-                                                   'image','area'))
+                                                   'image','area','bbox'))
     properties_pml = skimage.measure.regionprops_table( final_nuclei, intensity_image=pml_image, 
                                         properties=('label','mean_intensity','max_intensity','intensity_image',
-                                                   'image','area'))
+                                                   'image','area','bbox'))
     properties_srrm2 = skimage.measure.regionprops_table( final_nuclei, intensity_image=srrm2_image, 
                                         properties=('label','mean_intensity','max_intensity','intensity_image',
-                                                   'image','area'))
+                                                   'image','area','bbox'))
     
     for nucleus_index in range( len( properties_gfp['label'])):
         nucleus_image = properties_gfp['image'][nucleus_index]
@@ -1793,7 +1841,57 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
         region_pixels_srrm2 = region_image_srrm2[nucleus_image]
         std_intensity_srrm2 = np.std( region_pixels_srrm2 )
         total_intensity_srrm2 = mean_intensity_srrm2 * nucleus_area
+
+        bbox = (properties_gfp['bbox-0'][nucleus_index],
+                properties_gfp['bbox-1'][nucleus_index],
+                properties_gfp['bbox-2'][nucleus_index],
+                properties_gfp['bbox-3'][nucleus_index])
+
+        unmasked_region_gfp_image = gfp_image[bbox[0]:bbox[2], bbox[1]:bbox[3]]
+        unmasked_region_dapi_image = dapi_image[bbox[0]:bbox[2], bbox[1]:bbox[3]]
+        unmasked_region_srrm2_image = srrm2_image[bbox[0]:bbox[2], bbox[1]:bbox[3]]
+        unmasked_region_pml_image = pml_image[bbox[0]:bbox[2], bbox[1]:bbox[3]]
+        mask_region_nucleus = properties_gfp['image'][nucleus_index]
         
+        output_fname_dapi = '{file_save_dir}/well{well_num}_field{tile_num}_cell{cell_num}_DAPI.tif'.format(
+            file_save_dir=file_save_dir,
+            cell_num=nucleus_label, well_num=well_num, tile_num=tile_num)
+
+        output_fname_gfp = '{file_save_dir}/well{well_num}_field{tile_num}_cell{cell_num}_GFP.tif'.format(
+            file_save_dir=file_save_dir,
+            cell_num=nucleus_label, well_num=well_num, tile_num=tile_num)
+
+        output_fname_pml = '{file_save_dir}/well{well_num}_field{tile_num}_cell{cell_num}_pml.tif'.format(
+            file_save_dir=file_save_dir,
+            cell_num=nucleus_label, well_num=well_num, tile_num=tile_num)
+
+        output_fname_srrm2 = '{file_save_dir}/well{well_num}_field{tile_num}_cell{cell_num}_srrm2.tif'.format(
+            file_save_dir=file_save_dir,
+            cell_num=nucleus_label, well_num=well_num, tile_num=tile_num)
+
+        output_fname_condensates = '{file_save_dir}/well{well_num}_field{tile_num}_cell{cell_num}_condensates.tif'.format(
+            file_save_dir=file_save_dir,
+            cell_num=nucleus_label, well_num=well_num, tile_num=tile_num)
+
+        output_fname_condensates_srrm2 = '{file_save_dir}/well{well_num}_field{tile_num}_cell{cell_num}_srrm2_condensates.tif'.format(
+            file_save_dir=file_save_dir,
+            cell_num=nucleus_label, well_num=well_num, tile_num=tile_num)
+
+        output_fname_condensates_pml = '{file_save_dir}/well{well_num}_field{tile_num}_cell{cell_num}_pml_condensates.tif'.format(
+            file_save_dir=file_save_dir,
+            cell_num=nucleus_label, well_num=well_num, tile_num=tile_num)
+
+        output_fname_mask = '{file_save_dir}/well{well_num}_field{tile_num}_cell{cell_num}_mask.npy'.format(
+            file_save_dir=file_save_dir,
+            cell_num=nucleus_label, well_num=well_num, tile_num=tile_num)
+
+        save( output_fname_dapi, unmasked_region_dapi_image, compress=1)
+        save( output_fname_gfp, unmasked_region_gfp_image, compress=1)
+        save( output_fname_pml, unmasked_region_pml_image, compress=1)
+        save( output_fname_srrm2, unmasked_region_srrm2_image, compress=1)
+        np.save( output_fname_mask, mask_region_nucleus )
+
+
         ############
         # Get GFP condensates
         ############
@@ -1822,7 +1920,8 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
                                                                         nucleus_label,
                                                                         condensate_cutoff_intensity, 
                                                                         THRESH_STDS,
-                                                                        plot=plot )
+                                                                        plot=plot,
+                                                                        save_file=output_fname_condensates )
 
             
         ##############
@@ -1836,7 +1935,8 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
                                                                             nucleus_label,
                                                                             PML_condensate_cutoff_intensity, 
                                                                             THRESH_STDS,
-                                                                            plot=plot )
+                                                                            plot=plot,
+                                                                            save_file=output_fname_condensates_pml )
         
         ############
         # Get srrm2 condensates
@@ -1849,7 +1949,8 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
                                                                             nucleus_label,
                                                                             condensate_cutoff_intensity, 
                                                                             THRESH_STDS,
-                                                                            plot=plot )
+                                                                            plot=plot,
+                                                                            save_file=output_fname_condensates_srrm2 )
         
         ############
         # Get the overlap between GFP and other condensates
@@ -1895,6 +1996,24 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
             condensates_properties_dict_GFP['total_condensate_intensity'] / total_intensity_GFP )
         nuclei_dict['total_cond_area_GFP'].append( 
             condensates_properties_dict_GFP['total_condensate_area'])
+        nuclei_dict['mean_condensate_area'].append(
+                condensates_properties_dict_GFP['mean_condensate_area'])
+        nuclei_dict['std_condensate_area'].append(
+                condensates_properties_dict_GFP['std_condensate_area'])
+        nuclei_dict['mean_condensate_eccentricity'].append(
+                condensates_properties_dict_GFP['mean_condensate_eccentricity'])
+        nuclei_dict['std_condensate_eccentricity'].append(
+                condensates_properties_dict_GFP['std_condensate_eccentricity'])
+        nuclei_dict['glcm_contrast'].append(
+                condensates_properties_dict_GFP['glcm_contrast'])
+        nuclei_dict['glcm_dissim'].append(
+                condensates_properties_dict_GFP['glcm_dissim'])
+        nuclei_dict['glcm_energy'].append(
+                condensates_properties_dict_GFP['glcm_energy'])
+        nuclei_dict['glcm_correlation'].append(
+                condensates_properties_dict_GFP['glcm_correlation'])
+        nuclei_dict['glcm_homogeneity'].append(
+                condensates_properties_dict_GFP['glcm_homogeneity'])
         
 
         nuclei_dict['mean_GFP_intensity_pml'].append( mean_intensity_pml )
@@ -1919,6 +2038,24 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
             condensates_properties_dict_pml['total_condensate_intensity'] / total_intensity_pml )
         nuclei_dict['total_cond_area_pml'].append( 
             condensates_properties_dict_pml['total_condensate_area'])
+        nuclei_dict['mean_condensate_area_pml'].append(
+                condensates_properties_dict_pml['mean_condensate_area'])
+        nuclei_dict['std_condensate_area_pml'].append(
+                condensates_properties_dict_pml['std_condensate_area'])
+        nuclei_dict['mean_condensate_eccentricity_pml'].append(
+                condensates_properties_dict_pml['mean_condensate_eccentricity'])
+        nuclei_dict['std_condensate_eccentricity_pml'].append(
+                condensates_properties_dict_pml['std_condensate_eccentricity'])
+        nuclei_dict['glcm_contrast_pml'].append(
+                condensates_properties_dict_pml['glcm_contrast'])
+        nuclei_dict['glcm_dissim_pml'].append(
+                condensates_properties_dict_pml['glcm_dissim'])
+        nuclei_dict['glcm_energy_pml'].append(
+                condensates_properties_dict_pml['glcm_energy'])
+        nuclei_dict['glcm_correlation_pml'].append(
+                condensates_properties_dict_pml['glcm_correlation'])
+        nuclei_dict['glcm_homogeneity_pml'].append(
+                condensates_properties_dict_pml['glcm_homogeneity'])
         
         
         nuclei_dict['mean_GFP_intensity_srrm2'].append( mean_intensity_srrm2 )
@@ -1943,6 +2080,24 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
             condensates_properties_dict_srrm2['total_condensate_intensity'] / total_intensity_srrm2 )
         nuclei_dict['total_cond_area_srrm2'].append( 
             condensates_properties_dict_srrm2['total_condensate_area'])
+        nuclei_dict['mean_condensate_area_srrm2'].append(
+                condensates_properties_dict_srrm2['mean_condensate_area'])
+        nuclei_dict['std_condensate_area_srrm2'].append(
+                condensates_properties_dict_srrm2['std_condensate_area'])
+        nuclei_dict['mean_condensate_eccentricity_srrm2'].append(
+                condensates_properties_dict_srrm2['mean_condensate_eccentricity'])
+        nuclei_dict['std_condensate_eccentricity_srrm2'].append(
+                condensates_properties_dict_srrm2['std_condensate_eccentricity'])
+        nuclei_dict['glcm_contrast_srrm'].append(
+                condensates_properties_dict_srrm2['glcm_contrast'])
+        nuclei_dict['glcm_dissim_srrm2'].append(
+                condensates_properties_dict_srrm2['glcm_dissim'])
+        nuclei_dict['glcm_energy_srrm2'].append(
+                condensates_properties_dict_srrm2['glcm_energy'])
+        nuclei_dict['glcm_correlation_srrm2'].append(
+                condensates_properties_dict_srrm2['glcm_correlation'])
+        nuclei_dict['glcm_homogeneity_srrm2'].append(
+                condensates_properties_dict_srrm2['glcm_homogeneity'])
         
         nuclei_dict['overlap_area_gfp_pml'].append( overlap_area_gfp_pml )
         nuclei_dict['overlap_area_gfp_srrm2'].append( overlap_area_gfp_srrm2 )
@@ -1950,6 +2105,12 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
         nuclei_dict['fraction_gfp_pml_overlap'].append( fraction_gfp_pml_overlap )
         nuclei_dict['fraction_gfp_srrm2_overlap'].append( fraction_gfp_srrm2_overlap )
         nuclei_dict['fraction_srrm2_pml_overlap'].append( fraction_srrm2_pml_overlap )
+
+        nuclei_dict['cell_img_gfp_file'].append( output_fname_gfp )
+        nuclei_dict['cell_img_pml_file'].append( output_fname_pml )
+        nuclei_dict['cell_img_srrm2_file'].append( output_fname_srrm2 )
+        nuclei_dict['cell_img_dapi_file'].append( output_fname_dapi )
+        nuclei_dict['cell_img_mask_file'].append( output_fname_mask )
 
 
     df_nuclei = pd.DataFrame(data=nuclei_dict)
