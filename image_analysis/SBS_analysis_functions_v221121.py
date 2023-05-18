@@ -1192,7 +1192,7 @@ def get_condensates_nucleoli_explicit(image,
                                      area,
                                      intensity_image,
                                      label,
-                                     condensate_cutoff_intensity, plot=True):
+                                     condensate_cutoff_intensity, plot=True, save_file=''):
     condensates = get_nucleoli_mask_explicit( image, mean_intensity, area,
                                             intensity_image, label,
                                              condensate_cutoff_intensity, plot)
@@ -1200,6 +1200,9 @@ def get_condensates_nucleoli_explicit(image,
     #print( np.unique(condensates ))
     condensates = ops.process.apply_watershed(condensates, smooth=8)
     #print( np.unique(condensates) )
+
+    if save_file != '':
+        save( save_file, condensates )
 
     # there shouldn't be any holes that we need to exclude from dilute phase concentration calculations
     final_filled_hole_mask_filt = image
@@ -1233,11 +1236,13 @@ def get_condensate_overlap( condensates_1, condensates_2, plot=True ):
     return total_overlap_area, fraction_1_2_overlap
 
 def phenotype_phenix_4channel_NPM_coilin( fname_dapi, fname_gfp, fname_npm, fname_coilin,
+                                        ffc_dapi, ffc_gfp, ffc_npm, ffc_coilin,
                                          well_num, tile_num, min_size=1000,
                         smooth_size=5, threshold_initial_guess=500,
                         nuclei_smooth_value=20, area_min=5000, plot=False,
                         area_max=20000, condensate_cutoff_intensity=2000,
-                        THRESH_STDS=5):
+                        THRESH_STDS=5, cellpose=True, cellpose_diameter=87, 
+                        nuclei_mask_file=''):
     ##################
     # segment nuclei from dapi image
     ##################
@@ -1246,7 +1251,21 @@ def phenotype_phenix_4channel_NPM_coilin( fname_dapi, fname_gfp, fname_npm, fnam
     npm_image = read( fname_npm )
     coilin_image = read( fname_coilin )
 
-    final_nuclei = segment_nuclei_phenotype( dapi_image, threshold_initial_guess, smooth_size,
+    # apply flatfield correction
+    dapi_image = apply_flatfield_correction( dapi_image, ffc_dapi )
+    gfp_image = apply_flatfield_correction( gfp_image, ffc_gfp )
+    npm_image = apply_flatfield_correction( npm_image, ffc_npm )
+    coilin_image = apply_flatfield_correction( coilin_image, ffc_coilin )
+
+    if nuclei_mask_file != '':
+        final_nuclei = read( nuclei_mask_file )
+    else:
+    
+        if cellpose:
+            dapi_rgb = prepare_png_cellpose( dapi_image )
+            final_nuclei = segment_nuclei_phenotype_cellpose( dapi_rgb, cellpose_diameter )
+        else:
+            final_nuclei = segment_nuclei_phenotype( dapi_image, threshold_initial_guess, smooth_size,
                         nuclei_smooth_value, min_size, area_min, area_max, plot)
 
     ##################
@@ -1274,6 +1293,16 @@ def phenotype_phenix_4channel_NPM_coilin( fname_dapi, fname_gfp, fname_npm, fnam
         'total_gfp_intensity_GFP': [],
         'frac_gfp_in_cond_GFP': [],
         'total_cond_area_GFP': [],
+        'mean_condensate_area': [],
+        'std_condensate_area': [],
+        'mean_condensate_eccentricity': [],
+        'std_condensate_eccentricity': [],
+        'glcm_energy': [],
+        'glcm_correlation': [],
+        'glcm_dissim': [],
+        'glcm_homogeneity': [],
+        'glcm_contrast': [],
+
 
         'mean_GFP_intensity_npm': [],
         'std_GFP_intensity_npm': [],
@@ -1288,6 +1317,11 @@ def phenotype_phenix_4channel_NPM_coilin( fname_dapi, fname_gfp, fname_npm, fnam
         'total_gfp_intensity_npm': [],
         'frac_gfp_in_cond_npm': [],
         'total_cond_area_npm': [],
+        'mean_condensate_area_npm': [],
+        'std_condensate_area_npm': [],
+        'mean_condensate_eccentricity_npm': [],
+        'std_condensate_eccentricity_npm': [],
+
 
         'mean_GFP_intensity_coilin': [],
         'std_GFP_intensity_coilin': [],
@@ -1302,6 +1336,15 @@ def phenotype_phenix_4channel_NPM_coilin( fname_dapi, fname_gfp, fname_npm, fnam
         'total_gfp_intensity_coilin': [],
         'frac_gfp_in_cond_coilin': [],
         'total_cond_area_coilin': [],
+        'mean_condensate_area_coilin': [],
+        'std_condensate_area_coilin': [],
+        'mean_condensate_eccentricity_coilin': [],
+        'std_condensate_eccentricity_coilin': [],
+        'glcm_energy_coilin': [],
+        'glcm_correlation_coilin': [],
+        'glcm_dissim_coilin': [],
+        'glcm_homogeneity_coilin': [],
+        'glcm_contrast_coilin': [],
 
         'overlap_area_gfp_npm': [],
         'fraction_gfp_npm_overlap': [],
@@ -1309,6 +1352,12 @@ def phenotype_phenix_4channel_NPM_coilin( fname_dapi, fname_gfp, fname_npm, fnam
         'fraction_gfp_coilin_overlap': [],
         'overlap_area_coilin_npm': [],
         'fraction_coilin_npm_overlap': [],
+
+        'cell_img_gfp_file': [],
+        'cell_img_dapi_file': [],
+        'cell_img_npm_file': [],
+        'cell_img_coilin_file': [],
+        'cell_img_mask_file': [],
 
     }
     num_nuclei = len(np.unique(final_nuclei) ) -1
@@ -1321,19 +1370,18 @@ def phenotype_phenix_4channel_NPM_coilin( fname_dapi, fname_gfp, fname_npm, fnam
                                         properties=('label','mean_intensity'))
     properties_gfp = skimage.measure.regionprops_table( final_nuclei, intensity_image=gfp_image,
                                         properties=('label','mean_intensity','max_intensity','intensity_image',
-                                                   'image','area'))
+                                                   'image','area','bbox'))
     properties_npm = skimage.measure.regionprops_table( final_nuclei, intensity_image=npm_image,
                                         properties=('label','mean_intensity','max_intensity','intensity_image',
-                                                   'image','area'))
+                                                   'image','area','bbox'))
     properties_coilin = skimage.measure.regionprops_table( final_nuclei, intensity_image=coilin_image,
                                         properties=('label','mean_intensity','max_intensity','intensity_image',
-                                                   'image','area'))
+                                                   'image','area','bbox'))
 
     for nucleus_index in range( len( properties_gfp['label'])):
         nucleus_image = properties_gfp['image'][nucleus_index]
         nucleus_area = properties_gfp['area'][nucleus_index]
         nucleus_label = properties_gfp['label'][nucleus_index]
-        #if nucleus_label != 41: continue
         mean_dapi_intensity = properties_dapi['mean_intensity'][nucleus_index]
 
         mean_intensity_GFP = properties_gfp['mean_intensity'][nucleus_index]
@@ -1356,6 +1404,57 @@ def phenotype_phenix_4channel_NPM_coilin( fname_dapi, fname_gfp, fname_npm, fnam
         region_pixels_coilin = region_image_coilin[nucleus_image]
         std_intensity_coilin = np.std( region_pixels_coilin )
         total_intensity_coilin = mean_intensity_coilin * nucleus_area
+
+        bbox = (properties_gfp['bbox-0'][nucleus_index],
+                properties_gfp['bbox-1'][nucleus_index],
+                properties_gfp['bbox-2'][nucleus_index],
+                properties_gfp['bbox-3'][nucleus_index])
+
+        unmasked_region_gfp_image = gfp_image[bbox[0]:bbox[2], bbox[1]:bbox[3]]
+        unmasked_region_dapi_image = dapi_image[bbox[0]:bbox[2], bbox[1]:bbox[3]]
+        unmasked_region_npm_image = npm_image[bbox[0]:bbox[2], bbox[1]:bbox[3]]
+        unmasked_region_coilin_image = coilin_image[bbox[0]:bbox[2], bbox[1]:bbox[3]]
+        mask_region_nucleus = properties_gfp['image'][nucleus_index]
+
+
+        output_fname_dapi = '{file_save_dir}/well{well_num}_field{tile_num}_cell{cell_num}_DAPI.tif'.format(
+            file_save_dir=file_save_dir,
+            cell_num=nucleus_label, well_num=well_num, tile_num=tile_num)
+
+        output_fname_gfp = '{file_save_dir}/well{well_num}_field{tile_num}_cell{cell_num}_GFP.tif'.format(
+            file_save_dir=file_save_dir,
+            cell_num=nucleus_label, well_num=well_num, tile_num=tile_num)
+
+        output_fname_npm = '{file_save_dir}/well{well_num}_field{tile_num}_cell{cell_num}_npm.tif'.format(
+            file_save_dir=file_save_dir,
+            cell_num=nucleus_label, well_num=well_num, tile_num=tile_num)
+
+        output_fname_coilin = '{file_save_dir}/well{well_num}_field{tile_num}_cell{cell_num}_coilin.tif'.format(
+            file_save_dir=file_save_dir,
+            cell_num=nucleus_label, well_num=well_num, tile_num=tile_num)
+
+        output_fname_condensates = '{file_save_dir}/well{well_num}_field{tile_num}_cell{cell_num}_condensates.tif'.format(
+            file_save_dir=file_save_dir,
+            cell_num=nucleus_label, well_num=well_num, tile_num=tile_num)
+
+        output_fname_condensates_coilin = '{file_save_dir}/well{well_num}_field{tile_num}_cell{cell_num}_coilin_condensates.tif'.format(
+            file_save_dir=file_save_dir,
+            cell_num=nucleus_label, well_num=well_num, tile_num=tile_num)
+
+        output_fname_condensates_npm = '{file_save_dir}/well{well_num}_field{tile_num}_cell{cell_num}_npm_condensates.tif'.format(
+            file_save_dir=file_save_dir,
+            cell_num=nucleus_label, well_num=well_num, tile_num=tile_num)
+
+        output_fname_mask = '{file_save_dir}/well{well_num}_field{tile_num}_cell{cell_num}_mask.npy'.format(
+            file_save_dir=file_save_dir,
+            cell_num=nucleus_label, well_num=well_num, tile_num=tile_num)
+
+        save( output_fname_dapi, unmasked_region_dapi_image, compress=1)
+        save( output_fname_gfp, unmasked_region_gfp_image, compress=1)
+        save( output_fname_npm, unmasked_region_npm_image, compress=1)
+        save( output_fname_coilin, unmasked_region_coilin_image, compress=1)
+        np.save( output_fname_mask, mask_region_nucleus )
+
 
         ############
         # Get GFP condensates
@@ -1385,7 +1484,8 @@ def phenotype_phenix_4channel_NPM_coilin( fname_dapi, fname_gfp, fname_npm, fnam
                                                                         nucleus_label,
                                                                         condensate_cutoff_intensity,
                                                                         THRESH_STDS,
-                                                                        plot=plot )
+                                                                        plot=plot,
+                                                                        save_file=output_fname_condensates )
 
 
         ##############
@@ -1398,7 +1498,8 @@ def phenotype_phenix_4channel_NPM_coilin( fname_dapi, fname_gfp, fname_npm, fnam
                                                                             region_image_npm,
                                                                             nucleus_label,
                                                                             condensate_cutoff_intensity,
-                                                                            plot=plot )
+                                                                            plot=plot,
+                                                                            save_file=output_fname_condensates_npm )
 
         ############
         # Get coilin condensates
@@ -1411,7 +1512,8 @@ def phenotype_phenix_4channel_NPM_coilin( fname_dapi, fname_gfp, fname_npm, fnam
                                                                             nucleus_label,
                                                                             condensate_cutoff_intensity,
                                                                             THRESH_STDS,
-                                                                            plot=plot )
+                                                                            plot=plot,
+                                                                            save_file=output_fname_condensates_coilin )
 
         ############
         # Get the overlap between GFP and other condensates
@@ -1458,6 +1560,24 @@ def phenotype_phenix_4channel_NPM_coilin( fname_dapi, fname_gfp, fname_npm, fnam
             condensates_properties_dict_GFP['total_condensate_intensity'] / total_intensity_GFP )
         nuclei_dict['total_cond_area_GFP'].append(
             condensates_properties_dict_GFP['total_condensate_area'])
+        nuclei_dict['mean_condensate_area'].append(
+                condensates_properties_dict_GFP['mean_condensate_area'])
+        nuclei_dict['std_condensate_area'].append(
+                condensates_properties_dict_GFP['std_condensate_area'])
+        nuclei_dict['mean_condensate_eccentricity'].append(
+                condensates_properties_dict_GFP['mean_condensate_eccentricity'])
+        nuclei_dict['std_condensate_eccentricity'].append(
+                condensates_properties_dict_GFP['std_condensate_eccentricity'])
+        nuclei_dict['glcm_contrast'].append(
+                condensates_properties_dict_GFP['glcm_contrast'])
+        nuclei_dict['glcm_dissim'].append(
+                condensates_properties_dict_GFP['glcm_dissim'])
+        nuclei_dict['glcm_energy'].append(
+                condensates_properties_dict_GFP['glcm_energy'])
+        nuclei_dict['glcm_correlation'].append(
+                condensates_properties_dict_GFP['glcm_correlation'])
+        nuclei_dict['glcm_homogeneity'].append(
+                condensates_properties_dict_GFP['glcm_homogeneity'])
 
 
         nuclei_dict['mean_GFP_intensity_npm'].append( mean_intensity_npm )
@@ -1482,6 +1602,14 @@ def phenotype_phenix_4channel_NPM_coilin( fname_dapi, fname_gfp, fname_npm, fnam
             condensates_properties_dict_npm['total_condensate_intensity'] / total_intensity_npm )
         nuclei_dict['total_cond_area_npm'].append(
             condensates_properties_dict_npm['total_condensate_area'])
+        nuclei_dict['mean_condensate_area_npm'].append(
+                condensates_properties_dict_npm['mean_condensate_area'])
+        nuclei_dict['std_condensate_area_npm'].append(
+                condensates_properties_dict_npm['std_condensate_area'])
+        nuclei_dict['mean_condensate_eccentricity_npm'].append(
+                condensates_properties_dict_npm['mean_condensate_eccentricity'])
+        nuclei_dict['std_condensate_eccentricity_npm'].append(
+                condensates_properties_dict_npm['std_condensate_eccentricity'])
 
 
         nuclei_dict['mean_GFP_intensity_coilin'].append( mean_intensity_coilin )
@@ -1506,6 +1634,24 @@ def phenotype_phenix_4channel_NPM_coilin( fname_dapi, fname_gfp, fname_npm, fnam
             condensates_properties_dict_coilin['total_condensate_intensity'] / total_intensity_coilin )
         nuclei_dict['total_cond_area_coilin'].append(
             condensates_properties_dict_coilin['total_condensate_area'])
+        nuclei_dict['mean_condensate_area_coilin'].append(
+                condensates_properties_dict_coilin['mean_condensate_area'])
+        nuclei_dict['std_condensate_area_coilin'].append(
+                condensates_properties_dict_coilin['std_condensate_area'])
+        nuclei_dict['mean_condensate_eccentricity_coilin'].append(
+                condensates_properties_dict_coilin['mean_condensate_eccentricity'])
+        nuclei_dict['std_condensate_eccentricity_coilin'].append(
+                condensates_properties_dict_coilin['std_condensate_eccentricity'])
+        nuclei_dict['glcm_contrast_coilin'].append(
+                condensates_properties_dict_coilin['glcm_contrast'])
+        nuclei_dict['glcm_dissim_coilin'].append(
+                condensates_properties_dict_coilin['glcm_dissim'])
+        nuclei_dict['glcm_energy_coilin'].append(
+                condensates_properties_dict_coilin['glcm_energy'])
+        nuclei_dict['glcm_correlation_coilin'].append(
+                condensates_properties_dict_coilin['glcm_correlation'])
+        nuclei_dict['glcm_homogeneity_coilin'].append(
+                condensates_properties_dict_coilin['glcm_homogeneity'])
 
         nuclei_dict['overlap_area_gfp_npm'].append( overlap_area_gfp_npm )
         nuclei_dict['overlap_area_gfp_coilin'].append( overlap_area_gfp_coilin )
@@ -1514,16 +1660,23 @@ def phenotype_phenix_4channel_NPM_coilin( fname_dapi, fname_gfp, fname_npm, fnam
         nuclei_dict['fraction_gfp_coilin_overlap'].append( fraction_gfp_coilin_overlap )
         nuclei_dict['fraction_coilin_npm_overlap'].append( fraction_coilin_npm_overlap )
 
+        nuclei_dict['cell_img_gfp_file'].append( output_fname_gfp )
+        nuclei_dict['cell_img_npm_file'].append( output_fname_npm )
+        nuclei_dict['cell_img_coilin_file'].append( output_fname_coilin )
+        nuclei_dict['cell_img_dapi_file'].append( output_fname_dapi )
+        nuclei_dict['cell_img_mask_file'].append( output_fname_mask )
+
     df_nuclei = pd.DataFrame(data=nuclei_dict)
     return df_nuclei, final_nuclei
 
 def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname_srrm2,
+                                         ffc_dapi, ffc_gfp, ffc_pml, ffc_srrm2,
                                          well_num, tile_num, min_size=1000, 
                         smooth_size=5, threshold_initial_guess=500, 
                         nuclei_smooth_value=20, area_min=5000, plot=False,
                         area_max=20000, condensate_cutoff_intensity=2000,
                         PML_condensate_cutoff_intensity=1000,
-                        THRESH_STDS=5):
+                        THRESH_STDS=5,cellpose=True,cellpose_diameter=87, nuclei_mask_file=''):
     ##################
     # segment nuclei from dapi image
     ##################
