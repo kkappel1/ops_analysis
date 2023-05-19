@@ -1415,10 +1415,16 @@ def phenotype_phenix_4channel_NPM_coilin( fname_dapi, fname_gfp, fname_npm, fnam
         std_intensity_coilin = np.std( region_pixels_coilin )
         total_intensity_coilin = mean_intensity_coilin * nucleus_area
 
-        correlation_GFP_dapi = pearsonr( region_pixels_GFP, region_pixels_dapi )[0]
-        correlation_GFP_coilin = pearsonr( region_pixels_GFP, region_pixels_coilin )[0]
-        correlation_GFP_npm = pearsonr( region_pixels_GFP, region_pixels_npm )[0]
-        correlation_npm_coilin = pearsonr( region_pixels_npm, region_pixels_coilin )[0]
+        if (len( region_pixels_GFP ) < 2) or (len(region_pixels_dapi) < 2):
+            correlation_GFP_dapi = np.nan
+            correlation_GFP_coilin = np.nan
+            correlation_GFP_npm = np.nan
+            correlation_npm_coilin = np.nan
+        else:
+            correlation_GFP_dapi = pearsonr( region_pixels_GFP, region_pixels_dapi )[0]
+            correlation_GFP_coilin = pearsonr( region_pixels_GFP, region_pixels_coilin )[0]
+            correlation_GFP_npm = pearsonr( region_pixels_GFP, region_pixels_npm )[0]
+            correlation_npm_coilin = pearsonr( region_pixels_npm, region_pixels_coilin )[0]
 
         bbox = (properties_gfp['bbox-0'][nucleus_index],
                 properties_gfp['bbox-1'][nucleus_index],
@@ -1871,10 +1877,16 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
         std_intensity_srrm2 = np.std( region_pixels_srrm2 )
         total_intensity_srrm2 = mean_intensity_srrm2 * nucleus_area
 
-        correlation_GFP_pml = pearsonr( region_pixels_GFP, region_pixels_pml )[0]
-        correlation_GFP_srrm2 = pearsonr( region_pixels_GFP, region_pixels_srrm2 )[0]
-        correlation_pml_srrm2 = pearsonr( region_pixels_pml, region_pixels_srrm2 )[0]
-        correlation_GFP_dapi = pearsonr( region_pixels_GFP, region_pixels_dapi )[0]
+        if (len( region_pixels_GFP ) < 2) or (len(region_pixels_dapi) < 2):
+            correlation_GFP_dapi = np.nan
+            correlation_GFP_pml = np.nan
+            correlation_GFP_srrm2 = np.nan
+            correlation_pml_srrm2 = np.nan
+        else:
+            correlation_GFP_pml = pearsonr( region_pixels_GFP, region_pixels_pml )[0]
+            correlation_GFP_srrm2 = pearsonr( region_pixels_GFP, region_pixels_srrm2 )[0]
+            correlation_pml_srrm2 = pearsonr( region_pixels_pml, region_pixels_srrm2 )[0]
+            correlation_GFP_dapi = pearsonr( region_pixels_GFP, region_pixels_dapi )[0]
 
 
         bbox = (properties_gfp['bbox-0'][nucleus_index],
@@ -2266,7 +2278,10 @@ def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
         std_intensity_GFP = np.std( region_pixels_GFP )
         total_intensity_GFP = mean_intensity_GFP * nucleus_area
 
-        correlation_GFP_dapi = pearsonr( region_pixels_GFP, region_pixels_dapi )[0] 
+        if (len( region_pixels_GFP ) < 2) or (len(region_pixels_dapi) < 2):
+            correlation_GFP_dapi = np.nan
+        else:
+            correlation_GFP_dapi = pearsonr( region_pixels_GFP, region_pixels_dapi )[0] 
 
         # write images to files
         # the dapi image: nucleus_image = properties_gfp['image'][nucleus_index] (this is already masked though)
