@@ -109,6 +109,7 @@ def plot_all_cells_barcode( df_data, barcode, plot_save_name, vmax=3000. ):
 
     plt.savefig( f'{plot_save_name}', dpi=300 )
     plt.clf()
+    plt.close()
     end_time = datetime.datetime.now()
     
     print("Time plotting:", end_time - begin_time )
@@ -220,6 +221,7 @@ def plot_labeled_cells_sorted( df_data, barcodes, plot_save_name, NUM_IMGS=30,
 
             ax[num][img_num].imshow( padded_image, cmap='gray', vmin=0, vmax=vmax )
             if len(descriptions) > 0:
+                #print( num, img_num, len( descriptions ) )
                 ax[num][img_num].set_title(descriptions[num],fontsize=2,color='blue')
                 if img_num == 0:
                     ax[num][img_num].set_ylabel(descriptions[num],fontsize=4,color='blue', rotation=0)
