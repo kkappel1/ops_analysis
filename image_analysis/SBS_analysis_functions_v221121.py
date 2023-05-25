@@ -1704,20 +1704,25 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
                         nuclei_smooth_value=20, area_min=5000, plot=False,
                         area_max=20000, condensate_cutoff_intensity=2000,
                         PML_condensate_cutoff_intensity=1000,
-                        THRESH_STDS=5,cellpose=True,cellpose_diameter=87, nuclei_mask_file=''):
+                        THRESH_STDS=5,cellpose=True,cellpose_diameter=87, nuclei_mask_file='',
+                        pml_gfp_bleed_factor=0.):
     ##################
     # segment nuclei from dapi image
     ##################
     dapi_image = read( fname_dapi )
     gfp_image = read( fname_gfp )
-    pml_image = read( fname_pml )
+    pml_image_orig = read( fname_pml )
     srrm2_image = read( fname_srrm2 )
 
     # apply flatfield correction
     dapi_image = apply_flatfield_correction( dapi_image, ffc_dapi )
     gfp_image = apply_flatfield_correction( gfp_image, ffc_gfp )
-    pml_image = apply_flatfield_correction( pml_image, ffc_pml )
+    pml_image_orig = apply_flatfield_correction( pml_image_orig, ffc_pml )
     srrm2_image = apply_flatfield_correction( srrm2_image, ffc_srrm2 )
+
+    # apply bleedthrough correction
+    pml_image = apply_bleedthrough_correction( pml_image_orig, correction_image=gfp_image, 
+            bleedthrough_factor=pml_gfp_bleed_factor )
     
     if nuclei_mask_file != '':
         final_nuclei = read( nuclei_mask_file )
@@ -1825,6 +1830,7 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
         'cell_img_srrm2_file': [],
         'cell_img_mask_file': [],
         'corr_GFP_pml': [],
+        'corr_GFP_pml_uncorrected': [],
         'corr_GFP_srrm2': [],
         'corr_pml_srrm2': [],
         'corr_GFP_dapi': [],
@@ -1838,6 +1844,9 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
     properties_dapi = skimage.measure.regionprops_table( final_nuclei, intensity_image=dapi_image,
                                         properties=('label','mean_intensity','intensity_image'))
     properties_gfp = skimage.measure.regionprops_table( final_nuclei, intensity_image=gfp_image, 
+                                        properties=('label','mean_intensity','max_intensity','intensity_image',
+                                                   'image','area','bbox'))
+    properties_pml_orig = skimage.measure.regionprops_table( final_nuclei, intensity_image=pml_image_orig, 
                                         properties=('label','mean_intensity','max_intensity','intensity_image',
                                                    'image','area','bbox'))
     properties_pml = skimage.measure.regionprops_table( final_nuclei, intensity_image=pml_image, 
@@ -1869,6 +1878,13 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
         region_pixels_pml = region_image_pml[nucleus_image]
         std_intensity_pml = np.std( region_pixels_pml )
         total_intensity_pml = mean_intensity_pml * nucleus_area
+
+        mean_intensity_pml_orig = properties_pml_orig['mean_intensity'][nucleus_index]
+        max_intensity_pml_orig = properties_pml_orig['max_intensity'][nucleus_index]
+        region_image_pml_orig = properties_pml_orig['intensity_image'][nucleus_index]
+        region_pixels_pml_orig = region_image_pml_orig[nucleus_image]
+        std_intensity_pml_orig = np.std( region_pixels_pml_orig )
+        total_intensity_pml_orig = mean_intensity_pml_orig * nucleus_area
         
         mean_intensity_srrm2 = properties_srrm2['mean_intensity'][nucleus_index]
         max_intensity_srrm2 = properties_srrm2['max_intensity'][nucleus_index]
@@ -1880,10 +1896,12 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
         if (len( region_pixels_GFP ) < 2) or (len(region_pixels_dapi) < 2):
             correlation_GFP_dapi = np.nan
             correlation_GFP_pml = np.nan
+            correlation_GFP_pml_orig = np.nan
             correlation_GFP_srrm2 = np.nan
             correlation_pml_srrm2 = np.nan
         else:
             correlation_GFP_pml = pearsonr( region_pixels_GFP, region_pixels_pml )[0]
+            correlation_GFP_pml_orig = pearsonr( region_pixels_GFP, region_pixels_pml_orig )[0]
             correlation_GFP_srrm2 = pearsonr( region_pixels_GFP, region_pixels_srrm2 )[0]
             correlation_pml_srrm2 = pearsonr( region_pixels_pml, region_pixels_srrm2 )[0]
             correlation_GFP_dapi = pearsonr( region_pixels_GFP, region_pixels_dapi )[0]
@@ -2159,6 +2177,7 @@ def phenotype_phenix_4channel_PML_SRRM2( fname_dapi, fname_gfp, fname_pml, fname
         nuclei_dict['cell_img_dapi_file'].append( output_fname_dapi )
         nuclei_dict['cell_img_mask_file'].append( output_fname_mask )
         nuclei_dict['corr_GFP_pml'].append( correlation_GFP_pml )
+        nuclei_dict['corr_GFP_pml_uncorrected'].append( correlation_GFP_pml_orig )
         nuclei_dict['corr_GFP_srrm2'].append( correlation_GFP_srrm2 )
         nuclei_dict['corr_pml_srrm2'].append( correlation_pml_srrm2 )
         nuclei_dict['corr_GFP_dapi'].append( correlation_GFP_dapi )
