@@ -2,6 +2,7 @@ import datetime
 import matplotlib.pyplot as plt
 from ops.io import read_stack as read
 import numpy as np
+import matplotlib.colors as mcolors
 
 
 def plot_example_cells( df_data, barcodes, plot_save_name, NUM_IMGS=30, 
@@ -242,3 +243,105 @@ def plot_labeled_cells_sorted( df_data, barcodes, plot_save_name, NUM_IMGS=30,
     plt.clf()
     end_time = datetime.datetime.now()
     print("Time plotting:", end_time - begin_time )
+
+def plot_cell_colocalization(df_data, wells, img_1_name='cell_img_gfp_file', img_2_name='', vmax=2000.,
+        vmax_other=2000., NUM_IMGS=3, mean_intensity_cutoff=300., compare_stain='pml', plot_save_name=''):
+
+    fig, ax = plt.subplots(len(wells), NUM_IMGS*3, figsize=(NUM_IMGS*3,len(wells)))
+    for num, well in enumerate( wells ):
+        print( well )
+        well_data = df_data[ #(df_data['plate_tag'] == plate_tag) &
+                       (df_data['well']==well) &
+                       (df_data['mean_GFP_intensity_GFP']>mean_intensity_cutoff)]
+
+        # get representative cells
+        mean_num_cond = np.mean( well_data['num_condensates_GFP'] )
+        std_num_cond = np.std( well_data['num_condensates_GFP'] )
+        mean_intensity = np.mean( well_data['mean_GFP_intensity_GFP'] )
+        std_intensity = np.std( well_data['mean_GFP_intensity_GFP'] )
+
+        mean_num_cond_stain = np.mean( well_data[f'num_condensates_{compare_stain}'] )
+        std_num_cond_stain = np.std( well_data[f'num_condensates_{compare_stain}'] )
+
+        well_data_avg = well_data[ (well_data['num_condensates_GFP'].between(mean_num_cond-std_num_cond, mean_num_cond+std_num_cond )) &
+            (well_data['mean_GFP_intensity_GFP'].between(mean_intensity-std_intensity, mean_intensity+std_intensity)) &
+            (well_data[f'num_condensates_{compare_stain}'].between(mean_num_cond_stain-std_num_cond_stain, mean_num_cond_stain+std_num_cond_stain)) ]
+
+        print( mean_num_cond, mean_intensity, mean_num_cond_stain )
+        print( len(well_data), len(well_data_avg) )
+
+        img_num = 0
+        for index, cell in well_data_avg.iterrows():
+            if img_num > (NUM_IMGS-1): break
+            cell_image_gfp_file = cell['cell_img_gfp_file']
+            cell_image_mask_file = cell['cell_img_mask_file']
+            other_stain_file = cell[img_2_name]
+
+            other_stain_image = read( other_stain_file )
+            cell_image_gfp = read( cell_image_gfp_file )
+            cell_image_mask = np.load( cell_image_mask_file )
+
+            masked_cell_image_gfp = cell_image_mask * cell_image_gfp
+            masked_cell_image_other_stain = cell_image_mask * other_stain_image
+
+            ax[num][img_num].set_axis_off()
+
+            pad_x_size = max(0, 185 - np.shape(masked_cell_image_gfp)[0])
+            pad_y_size = max(0, 185 - np.shape(masked_cell_image_gfp)[1])
+            padded_image = np.pad( masked_cell_image_gfp, [(int(pad_x_size/2),int(pad_x_size/2)), 
+                                            (int(pad_y_size/2),int(pad_y_size/2))],
+                                            'constant', constant_values=0)
+
+            padded_image_other = np.pad( masked_cell_image_other_stain, [(int(pad_x_size/2),int(pad_x_size/2)), 
+                                            (int(pad_y_size/2),int(pad_y_size/2))],
+                                            'constant', constant_values=0)
+
+
+            colors = [(0, 'black'), (1, 'green')]
+            cmap_black_green = mcolors.LinearSegmentedColormap.from_list('custom_cmap', colors)
+            colorsbr = [(0, 'black'), (1, 'red')]
+            cmap_black_red = mcolors.LinearSegmentedColormap.from_list('custom_cmap', colorsbr)
+
+            ax[num][img_num].imshow( padded_image, cmap=cmap_black_green, vmin=0, vmax=vmax )
+            #ax[num][img_num].imshow( padded_image, cmap='gray', vmin=0, vmax=vmax )
+            max_for_other = np.max([np.max(padded_image_other), vmax_other])
+            ax[num][img_num+NUM_IMGS].imshow( padded_image_other, cmap=cmap_black_red, vmin=0, vmax=max_for_other )
+            #ax[num][img_num+NUM_IMGS].imshow( padded_image_other, cmap=cmap_black_red, vmin=0, vmax=vmax_other )
+            #ax[num][img_num+NUM_IMGS].imshow( padded_image_other, cmap='gray', vmin=0, vmax=vmax_other )
+            #ax[num][img_num+2*NUM_IMGS].imshow( padded_image, cmap=cmap_black_green, vmin=0, vmax=vmax, alpha=0.5 )
+            #ax[num][img_num+2*NUM_IMGS].imshow( padded_image, cmap='Greens', vmin=0, vmax=vmax, alpha=0.5 )
+            #ax[num][img_num+2*NUM_IMGS].imshow( padded_image_other, cmap=cmap_black_red, vmin=0, vmax=vmax_other, alpha=0.5 )
+            #ax[num][img_num+2*NUM_IMGS].imshow( padded_image_other, cmap='Purples', vmin=0, vmax=vmax_other, alpha=0.5 )
+
+            green_channel = padded_image / np.max(padded_image)
+            #green_channel = padded_image / vmax
+            above_one = green_channel > 1.
+            green_channel[ above_one ] = 1.
+
+            #red_channel = padded_image_other / np.max(padded_image_other)
+            red_channel = padded_image_other / np.max([np.max(padded_image_other), vmax_other])
+            #red_channel = padded_image_other / vmax_other
+            above_one = red_channel > 1.
+            red_channel[ above_one ] = 1.
+
+            rgb_image = np.zeros((padded_image.shape[0], padded_image.shape[1], 3))
+            rgb_image[:,:,0] = red_channel
+            rgb_image[:,:,1] = green_channel
+            ax[num][img_num+2*NUM_IMGS].imshow( rgb_image )
+
+            if img_num==0:
+                ax[num][img_num].set_ylabel(well, fontsize=8, color='blue')
+                print( compare_stain, "max red:", np.max([np.max(padded_image_other), vmax_other]) )
+            ax[num][img_num].set_title(well,fontsize=8,color='blue')
+            ax[num][img_num+2*NUM_IMGS].set_title(well,fontsize=8,color='blue')
+            ax[num][img_num+NUM_IMGS].set_title(well,fontsize=8,color='blue')
+        
+            img_num += 1
+
+    for i in range( len(wells)):
+        for j in range( NUM_IMGS*3 ):
+            ax[i][j].set_axis_off()
+
+    plt.savefig( f'{plot_save_name}', dpi=300 )
+    plt.clf()
+    plt.close()
