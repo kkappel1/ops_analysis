@@ -32,3 +32,22 @@ def apply_flatfield_correction( img, correction_matrix ):
     corrected[ saturated_pixels ] = 65535
     corrected = corrected.astype( img.dtype )
     return corrected 
+
+
+def apply_bleedthrough_correction( img, correction_image, bleedthrough_factor ):
+    if bleedthrough_factor == 0.:
+        # no correction to be done
+        return img
+
+    intensity_to_subtract = correction_image * bleedthrough_factor
+    corrected_img = img - intensity_to_subtract
+
+    # there should not be any values below zero
+    negative_pixels = corrected_img < 0.
+    corrected_img[ negative_pixels ] = 0.
+
+    corrected_img = corrected_img.astype( img.dtype )
+    return corrected_img 
+
+    pml_image = apply_bleedthrough_correction( pml_image, correction_image=gfp_image, 
+            bleedthrough_factor=pml_gfp_bleed_factor )
