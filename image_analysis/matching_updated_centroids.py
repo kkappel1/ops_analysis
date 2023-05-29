@@ -171,6 +171,7 @@ def get_10x_coords_from_40x_coords( x40x, y40x, linregress_model ):
 
 def get_field_num_from_phenix_name( name ):
     if "max" in name:
+        #print( "name", name )
         field_num = name.split('/')[-1].split('-')[0].split('f')[1].split('max')[0]
     else:
         field_num = name.split('/')[-1].split('-')[0].split('f')[1].split('p')[0]

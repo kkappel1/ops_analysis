@@ -2265,6 +2265,8 @@ def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
         'cell_img_dapi_file': [],
         'cell_img_mask_file': [],
         'corr_GFP_dapi': [],
+        'centroid_x': [],
+        'centroid_y': [],
         
     }
 
@@ -2274,7 +2276,7 @@ def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
         return df_nuclei, final_nuclei
 
     properties_dapi = skimage.measure.regionprops_table( final_nuclei, intensity_image=dapi_image,
-                                        properties=('label','mean_intensity','intensity_image'))
+                                        properties=('label','mean_intensity','intensity_image','centroid'))
 
     #print( well_num, tile_num, fname_dapi, fname_gfp )
     properties_gfp = skimage.measure.regionprops_table( final_nuclei, intensity_image=gfp_image, 
@@ -2286,6 +2288,8 @@ def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
         nucleus_area = properties_gfp['area'][nucleus_index]
         nucleus_label = properties_gfp['label'][nucleus_index]
         mean_dapi_intensity = properties_dapi['mean_intensity'][nucleus_index]
+        centroid_x = properties_dapi['centroid-1'][nucleus_index]
+        centroid_y = properties_dapi['centroid-0'][nucleus_index]
 
         region_image_dapi = properties_dapi['intensity_image'][nucleus_index]
         region_pixels_dapi = region_image_dapi[nucleus_image]
@@ -2459,6 +2463,8 @@ def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
         nuclei_dict['cell_img_dapi_file'].append( output_fname_dapi )
         nuclei_dict['cell_img_mask_file'].append( output_fname_mask )
         nuclei_dict['corr_GFP_dapi'].append( correlation_GFP_dapi )
+        nuclei_dict['centroid_x'].append( centroid_x )
+        nuclei_dict['centroid_y'].append( centroid_y )
         
 
     df_nuclei = pd.DataFrame(data=nuclei_dict)
