@@ -416,3 +416,56 @@ def plot_cells_pooled_vs_arrayed( df_data_pool, df_data_array, barcodes, sublibs
     print("Time plotting:", end_time - begin_time )
 
     return
+
+def plot_livecell_barcode( data_allt, barcode, timepoints, num_cells_to_plot, plot_save_name, vmax=3000. ):
+
+    begin_time = datetime.datetime.now()
+
+    # number of columns = number of timepoints
+    # number of rows = num_cells_to_plot
+    fig, ax = plt.subplots(num_cells_to_plot, len(timepoints), figsize=(len(timepoints),num_cells_to_plot))
+
+    # add unique tracked nucleus num
+    data_allt['unique_tracked_nucleus_num'] = data_allt['tile'].astype(str) + '_' +data_allt['tracked_nucleus_num'].astype(str)
+
+    # get all the cells with the specified barcode
+    unique_tracked_nucleus_nums = data_allt[ (data_allt['cell_barcode_0']==barcode) &
+            (data_allt['cell_barcode_1'].isnull())]['unique_tracked_nucleus_num'].tolist()
+    #data_allt_bc = data_allt[data_allt['unique_tracked_nucleus_num'].isin(unique_tracked_nucleus_nums )]
+
+    for cell_num, cell_id in enumerate( unique_tracked_nucleus_nums ):
+        print( cell_num )
+        if cell_num > (num_cells_to_plot -1): break
+        data_allt_cell = data_allt[ data_allt['unique_tracked_nucleus_num'] == cell_id ]
+        for img_num, time in enumerate(timepoints):
+            data_timep = data_allt_cell[ data_allt_cell['frame']==time ]
+            cell_image_gfp_file = data_timep['cell_img_gfp_file'].iloc[0]
+            cell_image_mask_file = data_timep['cell_img_mask_file'].iloc[0]
+
+            cell_image_gfp = read( cell_image_gfp_file )
+            cell_image_mask = np.load( cell_image_mask_file )
+
+            masked_cell_image_gfp = cell_image_mask * cell_image_gfp
+
+            ax[cell_num][img_num].set_axis_off()
+            pad_x_size = max(0, 185 - np.shape(masked_cell_image_gfp)[0])
+            pad_y_size = max(0, 185 - np.shape(masked_cell_image_gfp)[1])
+            padded_image = np.pad( masked_cell_image_gfp, [(int(pad_x_size/2),int(pad_x_size/2)), 
+                                            (int(pad_y_size/2),int(pad_y_size/2))],
+                                            'constant', constant_values=0)
+
+            ax[cell_num][img_num].imshow( padded_image, cmap='gray', vmin=0, vmax=vmax )
+
+
+    # turn all axes off
+    for i in range(num_cells_to_plot):
+        for j in range(len(timepoints)):
+            ax[i][j].set_axis_off()
+
+    plt.savefig( f'{plot_save_name}', dpi=300 )
+    plt.clf()
+    plt.close()
+    end_time = datetime.datetime.now()
+    print("Time plotting:", end_time - begin_time )
+    
+    return
