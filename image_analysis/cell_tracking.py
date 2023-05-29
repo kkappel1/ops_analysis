@@ -50,6 +50,8 @@ def analyze_graph(G, cutoff=100, start_frame=1):
     start_nodes = [n for n in G.nodes if n[0] == start_frame]
     max_frame = max([frame for frame, _ in G.nodes])
 
+    if len( start_nodes ) < 1: return {}, {}
+
     cost, path = nx.multi_source_dijkstra(G, start_nodes, cutoff=cutoff)
     cost = {k:v for k,v in cost.items() if k[0] == max_frame}
     path = {k:v for k,v in path.items() if k[0] == max_frame}
@@ -109,10 +111,10 @@ def filter_paths_better(cost, path, threshold=35):
     too_costly = [k for k,v in cost.items() if v > threshold]
     final_bad = updated_bad | set(too_costly)
     
-    print('final bad', len(final_bad), len(node_count_updated))
+    #print('final bad', len(final_bad), len(node_count_updated))
     
     relabel = [v for v in paths_after_removing_duplicates.values() if not (set(v) & final_bad)]
-    assert(len(relabel) > 0)
+    #assert(len(relabel) > 0)
     return relabel
 
 
@@ -128,7 +130,7 @@ def get_tracked_df_single_tile( data_allt, timepoints, cutoff=250. ):
         cost, path = analyze_graph( cell_tracking_graph, cutoff=cutoff, start_frame=time-1 )
         filtered_paths = filter_paths_better( cost, path, threshold=cutoff )
         filtered_paths_per_timepoint.append( filtered_paths )
-        print( "Final number of filtered paths:", len(filtered_paths) )
+        #print( "Final number of filtered paths:", len(filtered_paths) )
     
     
     # link all the paths
@@ -169,7 +171,7 @@ def get_tracked_df_single_tile( data_allt, timepoints, cutoff=250. ):
 
     return data_allt_tracked
 
-def get_tracked_df_all_tiles( data_allt, timepoints ):
+def get_tracked_df_all_tiles( data_allt, timepoints, cutoff=250. ):
     list_of_tiles = sorted(set(data_allt['tile'].tolist()))
 
     tracked_dfs_per_tile = []
@@ -177,7 +179,7 @@ def get_tracked_df_all_tiles( data_allt, timepoints ):
         print( "TRACKING TILE", tile, flush=True )
         data_allt_tile = data_allt[data_allt['tile']==tile ]
         # get the tracked df for this tile
-        tracked_df = get_tracked_df_single_tile( data_allt_tile, timepoints )
+        tracked_df = get_tracked_df_single_tile( data_allt_tile, timepoints, cutoff )
         tracked_dfs_per_tile.append( tracked_df )
 
     final_tracked_df_all_tiles = pd.concat( tracked_dfs_per_tile )
