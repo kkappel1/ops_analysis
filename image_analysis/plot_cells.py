@@ -345,3 +345,74 @@ def plot_cell_colocalization(df_data, wells, img_1_name='cell_img_gfp_file', img
     plt.savefig( f'{plot_save_name}', dpi=300 )
     plt.clf()
     plt.close()
+
+def plot_cells_pooled_vs_arrayed( df_data_pool, df_data_array, barcodes, sublibs_for_bcs, wells, plot_save_name,
+        NUM_IMGS=5, vmax=3000. ):
+
+    ################## plot some example cells:
+    begin_time = datetime.datetime.now()
+
+    fig, ax = plt.subplots(len(barcodes) , NUM_IMGS*2+1, figsize=(NUM_IMGS*2+1,len(barcodes)))
+    print( "done making axes" )
+    for num, barcode in enumerate(barcodes):
+        cells_with_barcode_pool = df_data_pool[(df_data_pool['cell_barcode_0']==barcode) &
+                                        (df_data_pool['cell_barcode_1'].isnull()) &
+                                        (df_data_pool['sublibrary']==sublibs_for_bcs[num])]
+        cells_array = df_data_array[(df_data_array['well']==wells[num])]
+        num_sample = min( NUM_IMGS, len( cells_with_barcode_pool  ) )
+        cells_with_barcode_pool_subset_sorted = cells_with_barcode_pool.sample( n=num_sample ).sort_values('mean_GFP_intensity_GFP').reset_index()
+        cells_array_subset_sorted = cells_array.sample( n=num_sample ).sort_values('mean_GFP_intensity_GFP').reset_index()
+        img_num = 0
+        print( "plotting", barcode )
+        for row_index in range( len(cells_array_subset_sorted) ):
+            cell_pool = cells_with_barcode_pool_subset_sorted.iloc[row_index]
+            cell_array = cells_array_subset_sorted.iloc[row_index]
+
+            if img_num >(NUM_IMGS-1): break
+            # get the gfp image
+            # get the image mask
+            cell_image_gfp_file_pool = cell_pool['cell_img_gfp_file']
+            cell_image_mask_file_pool = cell_pool['cell_img_mask_file']
+            cell_image_gfp_pool = read( cell_image_gfp_file_pool )
+            cell_image_mask_pool = np.load( cell_image_mask_file_pool )
+            masked_cell_image_gfp_pool = cell_image_mask_pool * cell_image_gfp_pool
+
+            ax[num][img_num].set_axis_off()
+            pad_x_size = max(0, 185 - np.shape(masked_cell_image_gfp_pool)[0])
+            pad_y_size = max(0, 185 - np.shape(masked_cell_image_gfp_pool)[1])
+            padded_image_pool = np.pad( masked_cell_image_gfp_pool, [(int(pad_x_size/2),int(pad_x_size/2)), 
+                                            (int(pad_y_size/2),int(pad_y_size/2))],
+                                            'constant', constant_values=0)
+
+            ax[num][img_num].imshow( padded_image_pool, cmap='gray', vmin=0, vmax=vmax )
+
+            cell_image_gfp_file_array = cell_array['cell_img_gfp_file']
+            cell_image_mask_file_array = cell_array['cell_img_mask_file']
+            cell_image_gfp_array = read( cell_image_gfp_file_array )
+            cell_image_mask_array = np.load( cell_image_mask_file_array )
+            masked_cell_image_gfp_array = cell_image_mask_array * cell_image_gfp_array
+
+            ax[num][img_num+NUM_IMGS+1].set_axis_off()
+            pad_x_size = max(0, 185 - np.shape(masked_cell_image_gfp_array)[0])
+            pad_y_size = max(0, 185 - np.shape(masked_cell_image_gfp_array)[1])
+            padded_image_array = np.pad( masked_cell_image_gfp_array, [(int(pad_x_size/2),int(pad_x_size/2)), 
+                                            (int(pad_y_size/2),int(pad_y_size/2))],
+                                            'constant', constant_values=0)
+
+            ax[num][img_num+NUM_IMGS+1].imshow( padded_image_array, cmap='gray', vmin=0, vmax=vmax )
+            ax[num][img_num+NUM_IMGS+1].set_title( f'{wells[num]}', color='blue', fontsize=6 )
+            ax[num][img_num].set_title( f'{barcode}', color='blue', fontsize=6 )
+
+            img_num += 1
+
+    # turn all axes off
+    for i in range(len(barcodes)):
+        for j in range(NUM_IMGS*2+1):
+            ax[i][j].set_axis_off()
+
+    plt.savefig( f'{plot_save_name}', dpi=300 )
+    plt.clf()
+    end_time = datetime.datetime.now()
+    print("Time plotting:", end_time - begin_time )
+
+    return
