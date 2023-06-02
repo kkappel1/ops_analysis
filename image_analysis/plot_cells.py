@@ -56,6 +56,7 @@ def plot_example_cells( df_data, barcodes, plot_save_name, NUM_IMGS=30,
 
     plt.savefig( f'{plot_save_name}', dpi=300 )
     plt.clf()
+    plt.close()
     end_time = datetime.datetime.now()
     print("Time plotting:", end_time - begin_time )
 
@@ -164,10 +165,10 @@ def plot_example_cells_sublib_sorted( df_data_all, barcodes, sublibs_for_bcs, pl
                     ax[num][img_num].set_ylabel(descriptions[num],fontsize=4,color='blue', rotation=0)
             else:
                 ax[num][img_num].set_title(barcode,fontsize=4,color='blue')
-            ax[num][img_num].text(0.1,0.9,cell['num_condensates_GFP'],fontsize=4,color='blue', transform=ax[num][img_num].transAxes)
-            ax[num][img_num].text(0.1,0.5,f"{cell['glcm_dissim']:.2f}",fontsize=4,color='blue' ,transform=ax[num][img_num].transAxes)
-            ax[num][img_num].text(0.1,0.3,f"{cell['mean_GFP_intensity_GFP']:.2f}",fontsize=4,color='blue' ,transform=ax[num][img_num].transAxes)
-            ax[num][img_num].text(0.1,0.1,f"{cell['frac_gfp_in_cond_GFP']:.2f}",fontsize=4,color='blue' ,transform=ax[num][img_num].transAxes)
+            #ax[num][img_num].text(0.1,0.9,cell['num_condensates_GFP'],fontsize=4,color='blue', transform=ax[num][img_num].transAxes)
+            #ax[num][img_num].text(0.1,0.5,f"{cell['glcm_dissim']:.2f}",fontsize=4,color='blue' ,transform=ax[num][img_num].transAxes)
+            #ax[num][img_num].text(0.1,0.3,f"{cell['mean_GFP_intensity_GFP']:.2f}",fontsize=4,color='blue' ,transform=ax[num][img_num].transAxes)
+            #ax[num][img_num].text(0.1,0.1,f"{cell['frac_gfp_in_cond_GFP']:.2f}",fontsize=4,color='blue' ,transform=ax[num][img_num].transAxes)
             img_num += 1
 
     # turn all axes off
@@ -177,6 +178,7 @@ def plot_example_cells_sublib_sorted( df_data_all, barcodes, sublibs_for_bcs, pl
 
     plt.savefig( f'{plot_save_name}', dpi=300 )
     plt.clf()
+    plt.close()
     end_time = datetime.datetime.now()
     print("Time plotting:", end_time - begin_time )
 
@@ -188,7 +190,6 @@ def plot_labeled_cells_sorted( df_data, barcodes, plot_save_name, NUM_IMGS=30,
     # can I plot a bunch of cells for a given barcode?
     print( "making axes" )
     print( len( barcodes ) )
-    #fig, ax = plt.subplots(len(barcodes) , NUM_IMGS)
     fig, ax = plt.subplots(len(barcodes) , NUM_IMGS, figsize=(NUM_IMGS,len(barcodes)))
     print( "done making axes" )
     for num, barcode in enumerate(barcodes):
@@ -223,7 +224,7 @@ def plot_labeled_cells_sorted( df_data, barcodes, plot_save_name, NUM_IMGS=30,
             ax[num][img_num].imshow( padded_image, cmap='gray', vmin=0, vmax=vmax )
             if len(descriptions) > 0:
                 #print( num, img_num, len( descriptions ) )
-                ax[num][img_num].set_title(descriptions[num],fontsize=2,color='blue')
+                ax[num][img_num].set_title(descriptions[num],fontsize=3,color='blue')
                 if img_num == 0:
                     ax[num][img_num].set_ylabel(descriptions[num],fontsize=4,color='blue', rotation=0)
             else:
@@ -239,8 +240,12 @@ def plot_labeled_cells_sorted( df_data, barcodes, plot_save_name, NUM_IMGS=30,
         for j in range(NUM_IMGS):
             ax[i][j].set_axis_off()
 
+    #plt.tight_layout()
+    plt.subplots_adjust( wspace=0.01, hspace=0.3 )
     plt.savefig( f'{plot_save_name}', dpi=300 )
     plt.clf()
+    plt.close()
+
     end_time = datetime.datetime.now()
     print("Time plotting:", end_time - begin_time )
 
@@ -412,6 +417,7 @@ def plot_cells_pooled_vs_arrayed( df_data_pool, df_data_array, barcodes, sublibs
 
     plt.savefig( f'{plot_save_name}', dpi=300 )
     plt.clf()
+    plt.close()
     end_time = datetime.datetime.now()
     print("Time plotting:", end_time - begin_time )
 
