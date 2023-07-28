@@ -184,13 +184,14 @@ def plot_example_cells_sublib_sorted( df_data_all, barcodes, sublibs_for_bcs, pl
     print("Time plotting:", end_time - begin_time )
 
 def save_images_for_cells(df_data_all, barcodes, sublibs_for_bcs, image_save_dir, NUM_IMGS=30,
-                mean_intensity_cutoff_low=150., mean_intensity_cutoff_high=2000.,vmax=3000., descriptions=[], pad_size=185):
+                mean_intensity_cutoff_low=150., mean_intensity_cutoff_high=2000.,vmax=3000., descriptions=[], pad_size=185,
+                check_image_size=False, include_mean_int_in_name=False ):
 
     ################## plot some example cells:
     begin_time = datetime.datetime.now()
 
     # can I plot a bunch of cells for a given barcode?
-    print( len( barcodes ) )
+    print( len( barcodes ) ) 
     num_thresholded = 0
     for num, barcode in enumerate(barcodes):
         df_data = df_data_all[df_data_all['sublibrary']==sublibs_for_bcs[num]]
@@ -204,6 +205,7 @@ def save_images_for_cells(df_data_all, barcodes, sublibs_for_bcs, image_save_dir
         img_num = 0
         for index, cell in cells_with_barcode_subset_sorted.iterrows():
             if img_num >(NUM_IMGS-1): break
+            mean_int_cell = cell['mean_GFP_intensity_GFP']
             # get the gfp image
             # get the image mask
             cell_image_gfp_file = cell['cell_img_gfp_file']
@@ -234,6 +236,12 @@ def save_images_for_cells(df_data_all, barcodes, sublibs_for_bcs, image_save_dir
                                             'constant', constant_values=0)
             #print( "max:", np.max( padded_image ) )
             #print( "shape:", np.shape( masked_cell_image_gfp ) )
+            if check_image_size:
+                if np.shape( padded_image )[0] > pad_size:
+                    continue
+                if np.shape( padded_image)[1] > pad_size:
+                    continue
+
             if np.max( padded_image ) > vmax:
                 num_thresholded += 1
             # threshold intensity
@@ -246,7 +254,10 @@ def save_images_for_cells(df_data_all, barcodes, sublibs_for_bcs, image_save_dir
             #padded_image *= int(65536. / vmax)
 
             # save the padded image
-            save( f'{image_save_dir}/{barcode}_{sublibs_for_bcs[num]}_{unique_cell_name}', padded_image )
+            if include_mean_int_in_name:
+                save( f'{image_save_dir}/{barcode}_{sublibs_for_bcs[num]}_{mean_int_cell:.0f}_{unique_cell_name}', padded_image )
+            else:
+                save( f'{image_save_dir}/{barcode}_{sublibs_for_bcs[num]}_{unique_cell_name}', padded_image )
             img_num += 1
     print( "Num thresholded", num_thresholded )
 
