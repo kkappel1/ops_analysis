@@ -931,6 +931,8 @@ def get_condensate_properties( condensates, image, intensity_image, label,
     mean_dilute_phase_intensity = np.mean( intensity_image[dilute_pixel_mask])
     std_dilute_phase_intensity = np.std( intensity_image[dilute_pixel_mask] )
 
+    mean_total_intensity_no_holes = np.mean(intensity_image[image & final_filled_hole_mask_filt])
+
     num_condensates = np.max( condensates_labeled )
 
     # get the size distribution of the condensates
@@ -982,6 +984,7 @@ def get_condensate_properties( condensates, image, intensity_image, label,
         'std_condensate_area': std_condensate_area,
         'mean_condensate_eccentricity': mean_condensate_eccentricity,
         'std_condensate_eccentricity': std_condensate_eccentricity,
+        'mean_total_intensity_no_holes': mean_total_intensity_no_holes,
     }
 
     return condensates_labeled, condensates_properties_dict
@@ -2267,6 +2270,7 @@ def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
         'corr_GFP_dapi': [],
         'centroid_x': [],
         'centroid_y': [],
+        'mean_GFP_intensity_no_holes': [],
         
     }
 
@@ -2465,6 +2469,8 @@ def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
         nuclei_dict['corr_GFP_dapi'].append( correlation_GFP_dapi )
         nuclei_dict['centroid_x'].append( centroid_x )
         nuclei_dict['centroid_y'].append( centroid_y )
+        nuclei_dict['mean_GFP_intensity_no_holes'].append( 
+                condensates_properties_dict_GFP['mean_total_intensity_no_holes'])
         
 
     df_nuclei = pd.DataFrame(data=nuclei_dict)

@@ -84,6 +84,57 @@ def load_data_sublib_and_correct_SNAP( requested_sublib, requested_rep, SNAP_cor
     print()
     return all_data_sublib
 
+
+def apply_SNAP_intensity_correction_extra_data( param_file, data_df_input):
+    data_df = data_df_input.copy( deep=True )
+    offset_params = pd.read_csv( param_file )
+    offset = offset_params['offset'][0]
+    slope = offset_params['slope'][0]
+    
+    features_to_correct = ['mean_GFP_intensity_no_holes']
+
+    for feature in features_to_correct:
+        data_df[ feature ] = slope*(data_df[feature] - offset) +offset
+
+    return data_df
+
+def load_extra_data_sublib_and_correct_SNAP( requested_sublib, requested_rep, SNAP_correction_param_file_dict,
+        base_dir=''):
+    all_data_sublib = pd.DataFrame()
+    for plate in plates:
+        for well in wells:
+            plate_well = f'{plate}_{well}'
+            sublib_rep = map_plate_well_to_sublib[ plate_well ]
+            sublib = sublib_rep.split('_')[0]
+            rep = int( sublib_rep.split('_')[1] )
+            if (sublib == requested_sublib) and (rep == requested_rep):
+                if base_dir != '':
+                    data_file = f'{base_dir}/plate{plate}/phenotype_data_plate_{plate}_well_{well}_analyze20230728.csv'
+                else:
+                    data_file = f'plate{plate}/phenotype_data_plate_{plate}_well_{well}_analyze20230728.csv'
+                data_plate_well = pd.read_csv( data_file )
+                data_plate_well = data_plate_well[['cell_img_gfp_file','corr_GFP_dapi','mean_GFP_intensity_no_holes']]
+                data_plate_well['plate'] = plate
+                data_plate_well['replicate'] = rep
+                # edit the file path for cell images
+                data_plate_well['cell_img_gfp_file'] = data_plate_well['cell_img_gfp_file'].str.replace( f'process_phenotype/plate_{plate}//CELL_IMAGES_analyze20230728',f'process_phenotype//plate_{plate}//CELL_IMAGES_analyze20230323')
+                if base_dir != '':
+                    data_plate_well['cell_img_gfp_file'] = f'{base_dir}/reanalyze_plate{plate}/' + data_plate_well['cell_img_gfp_file']
+                else:
+                    data_plate_well['cell_img_gfp_file'] = f'reanalyze_plate{plate}/' + data_plate_well['cell_img_gfp_file']
+                if plate_well in SNAP_correction_param_file_dict.keys():
+                    print( f"Correcting SNAP intensity in plate {plate} well {well}" )
+                    SNAP_correction_param_file = SNAP_correction_param_file_dict[plate_well]
+                    data_plate_well = apply_SNAP_intensity_correction_extra_data( SNAP_correction_param_file, data_plate_well)
+                all_data_sublib = pd.concat( [all_data_sublib, data_plate_well] )
+                #all_data_sublib = all_data_sublib.append( data_plate_well )
+                print( f"Loading plate {plate} well {well} for sublib {requested_sublib} rep {requested_rep}" )
+                
+    print()
+    return all_data_sublib
+
+
+
 def load_data_sublib_small_pools( requested_sublib, requested_rep, base_dir='' ):
     all_data_sublib = pd.DataFrame()
     for plate in small_plates:
