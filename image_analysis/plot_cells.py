@@ -266,6 +266,87 @@ def save_images_for_cells(df_data_all, barcodes, sublibs_for_bcs, image_save_dir
     end_time = datetime.datetime.now()
     print("Time plotting:", end_time - begin_time )
 
+def save_images_for_cells_no_bcs(df_data, image_save_dir, save_tag='', NUM_IMGS=30,
+                mean_intensity_cutoff_low=150., mean_intensity_cutoff_high=2000.,vmax=3000., 
+                descriptions=[], pad_size=185,
+                check_image_size=False, include_mean_int_in_name=False,
+                image_file_column='cell_img_gfp_file'):
+
+    ################## plot some example cells:
+    begin_time = datetime.datetime.now()
+
+    # can I plot a bunch of cells for a given barcode?
+    num_thresholded = 0
+    cells_with_barcode = df_data[(df_data['mean_GFP_intensity_GFP'].between(mean_intensity_cutoff_low, 
+                                        mean_intensity_cutoff_high))]
+    num_sample = min( NUM_IMGS, len( cells_with_barcode ) )
+    print( len(cells_with_barcode ) )
+    cells_with_barcode_subset_sorted = cells_with_barcode.sample( n=num_sample, random_state=1 ).sort_values('mean_GFP_intensity_GFP')
+    img_num = 0
+    for index, cell in cells_with_barcode_subset_sorted.iterrows():
+        if img_num >(NUM_IMGS-1): break
+        mean_int_cell = cell['mean_GFP_intensity_GFP']
+        # get the gfp image
+        # get the image mask
+        cell_image_gfp_file = cell[image_file_column]
+        unique_cell_name = cell_image_gfp_file.replace('/','_')
+        cell_image_gfp = read( cell_image_gfp_file )
+        cell_image_mask_file = cell['cell_img_mask_file']
+        cell_image_mask = np.load( cell_image_mask_file )
+        #masked_cell_image_gfp = cell_image_gfp
+        masked_cell_image_gfp = cell_image_mask * cell_image_gfp
+
+        pad_x_size = max(0, pad_size - np.shape(masked_cell_image_gfp)[0])
+        pad_y_size = max(0, pad_size - np.shape(masked_cell_image_gfp)[1])
+        if (pad_x_size % 2) == 0:
+            pad_x_size_left = int( pad_x_size/2)
+            pad_x_size_right = int( pad_x_size/2)
+        else:
+            pad_x_size_left = int( pad_x_size/2)
+            pad_x_size_right = pad_x_size - pad_x_size_left
+
+        if (pad_y_size % 2) == 0:
+            pad_y_size_left = int( pad_y_size/2)
+            pad_y_size_right = int( pad_y_size/2)
+        else:
+            pad_y_size_left = int( pad_y_size/2)
+            pad_y_size_right = pad_y_size - pad_y_size_left
+
+        padded_image = np.pad( masked_cell_image_gfp, [(pad_x_size_left,pad_x_size_right), 
+                                        (pad_y_size_left,pad_y_size_right)],
+                                        'constant', constant_values=0)
+        #print( "max:", np.max( padded_image ) )
+        #print( "shape:", np.shape( masked_cell_image_gfp ) )
+        if check_image_size:
+            if np.shape( padded_image )[0] > pad_size:
+                continue
+            if np.shape( padded_image)[1] > pad_size:
+                continue
+
+        if np.max( padded_image ) > vmax:
+            num_thresholded += 1
+        # threshold intensity
+        padded_image[ padded_image > vmax ] = vmax
+
+        #rescale
+        padded_image = padded_image / vmax
+        padded_image = padded_image * 65535
+        padded_image = padded_image.astype( masked_cell_image_gfp.dtype )
+        #padded_image *= int(65536. / vmax)
+
+        # save the padded image
+        if include_mean_int_in_name:
+            save( f'{image_save_dir}/{save_tag}_{mean_int_cell:.0f}_{unique_cell_name}', padded_image )
+        else:
+            save( f'{image_save_dir}/{save_tag}_{unique_cell_name}', padded_image )
+        img_num += 1
+    print( "Num thresholded", num_thresholded )
+
+    plt.clf()
+    plt.close()
+    end_time = datetime.datetime.now()
+    
+
 def plot_labeled_cells_sorted( df_data, barcodes, plot_save_name, NUM_IMGS=30, 
         mean_intensity_cutoff=150., vmax=3000., descriptions=[] ):
     ################## plot some example cells:
