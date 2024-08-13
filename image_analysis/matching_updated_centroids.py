@@ -173,6 +173,8 @@ def get_field_num_from_phenix_name( name ):
     if "max" in name:
         #print( "name", name )
         field_num = name.split('/')[-1].split('-')[0].split('f')[1].split('max')[0]
+    elif "mean" in name:
+        field_num = name.split('/')[-1].split('-')[0].split('f')[1].split('mean')[0]
     else:
         field_num = name.split('/')[-1].split('-')[0].split('f')[1].split('p')[0]
     return int(field_num)
@@ -222,6 +224,10 @@ def get_best_10x_image_match_from_model( file_40x, files_10x_base_name, images_4
     files_likely_tiles_10x = []
     for likely_tile in likely_tiles_10x:
         full_file_name = files_10x_base_name + 'tile' + str(likely_tile) + '.tif'
+        # check if the file exists
+        if not os.path.exists( full_file_name ):
+            print( full_file_name, "does not exist" )
+            continue
         files_likely_tiles_10x.append( full_file_name ) 
     #print( "likely_tiles_10x", likely_tiles_10x )
     #print( "files_likely_tiles_10x", files_likely_tiles_10x )

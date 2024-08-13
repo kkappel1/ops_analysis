@@ -1009,9 +1009,11 @@ def get_condensates_general_explicit( image,
     # automatically determine hole threshold
     inverted_image = -1 * intensity_image
     try:
-        dark_thresh = filters.threshold_li( inverted_image, initial_guess=-1.)
+        #print( "tolerance", np.min(np.diff(np.unique(inverted_image-np.min(inverted_image)))) )
+        #dark_thresh = filters.threshold_li( inverted_image, initial_guess=-1.)
+        dark_thresh = filters.threshold_li( inverted_image, initial_guess=-1.,tolerance=0.5)
     except:
-        print( "error with threshold li" )
+        print( "error with threshold li", flush=True )
         print( "save file name:", save_file )
         print( np.min( inverted_image), np.max(inverted_image) )
         dark_thresh = filters.threshold_li( inverted_image, initial_guess=np.max(inverted_image)-0.5)
@@ -2203,6 +2205,8 @@ def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
     dapi_image = read( fname_dapi )
     gfp_image = read( fname_gfp )
 
+    print( fname_dapi, flush=True )
+
     #save( f'preffc_dapi_well{well_num}_field{tile_num}.tif', dapi_image )
     #save( f'preffc_gfp_well{well_num}_field{tile_num}.tif', gfp_image )
 
@@ -2320,6 +2324,8 @@ def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
                 properties_gfp['bbox-2'][nucleus_index],
                 properties_gfp['bbox-3'][nucleus_index])
 
+        
+
 
         # don't worry about padding for now 
         # pad to a constant size
@@ -2331,6 +2337,7 @@ def prelim_phenotype_phenix_2channel_write_img_files( fname_dapi, fname_gfp,
         unmasked_region_gfp_image = gfp_image[bbox[0]:bbox[2], bbox[1]:bbox[3]]
         unmasked_region_dapi_image = dapi_image[bbox[0]:bbox[2], bbox[1]:bbox[3]]
         mask_region_nucleus = properties_gfp['image'][nucleus_index]
+
 
         # save to file, then read the file back in and check some properties to confirm that they exactly match
         output_fname_dapi = '{file_save_dir}/well{well_num}_field{tile_num}_cell{cell_num}_DAPI.tif'.format( 

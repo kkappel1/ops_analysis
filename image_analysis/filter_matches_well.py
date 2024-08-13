@@ -9,8 +9,8 @@ def filter_matches_well( data_file, no_overwrite ):
 
     begin_time = datetime.datetime.now()
     full_data = pd.read_csv( data_file )
-    plot_save_name_intensity = os.path.dirname( data_file ) + '/plot_filter_matches_intensity_' + data_file.split('/')[-1] + '.png'
-    plot_save_name_glcm = os.path.dirname( data_file ) + '/plot_filter_matches_glcm_' + data_file.split('/')[-1] + '.png'
+    plot_save_name_intensity = os.path.dirname( os.path.abspath( data_file) ) + '/plot_filter_matches_intensity_' + data_file.split('/')[-1] + '.png'
+    plot_save_name_glcm = os.path.dirname( os.path.abspath(data_file) ) + '/plot_filter_matches_glcm_' + data_file.split('/')[-1] + '.png'
 
     full_data_filt_int = filter_matches_intensity_range( full_data, residual_scalar_range=[0.01, 0.05, 0.1, 0.15, 0.5, 1.0], 
                                                          alpha=0.1, residual_offset=100, show_plot=False,

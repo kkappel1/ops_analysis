@@ -41,9 +41,9 @@ def phenotype_well( plate_num, well_num, out_tag, output_tif_40x_base_dir, list_
         check_match, match_dir, NUM_PROCESSES, ffc_file_dapi='', ffc_file_gfp='', do_ffc=True,
         nuclei_masks_dir=''):
     if check_match: 
-        print( "Checking for match files" )
+        print( "Checking for match files", flush=True )
     else:
-        print( "NOT checking for match files" )
+        print( "NOT checking for match files", flush=True )
     with multiprocessing.Pool(processes=NUM_PROCESSES) as pool:
         begin_time = datetime.datetime.now()
         min_size = 1000
@@ -79,10 +79,10 @@ def phenotype_well( plate_num, well_num, out_tag, output_tif_40x_base_dir, list_
             else:
                 files_and_tiles.append( [f, gfp_file, tile_num, file_save_dir] )
 
-        print( "len(files_and_tiles)", len(files_and_tiles) )
+        print( "len(files_and_tiles)", len(files_and_tiles), flush=True )
 
         if ffc_file_gfp != '' and ffc_file_dapi != '':
-            print( "reading ffc files" )
+            print( "reading ffc files", flush=True )
             ffc_dapi = read( ffc_file_dapi )
             ffc_gfp = read( ffc_file_gfp )
         else:
@@ -98,8 +98,8 @@ def phenotype_well( plate_num, well_num, out_tag, output_tif_40x_base_dir, list_
             ffc_dapi = np.ones_like( ffc_dapi )
             ffc_gfp = np.ones_like( ffc_gfp )
 
-        print( "min/max ffc", np.min( ffc_dapi ), np.max( ffc_dapi ) )
-        print( "min/max ffc", np.min( ffc_gfp ), np.max( ffc_gfp ) )
+        print( "min/max ffc", np.min( ffc_dapi ), np.max( ffc_dapi ), flush=True )
+        print( "min/max ffc", np.min( ffc_gfp ), np.max( ffc_gfp ), flush=True )
         # write out dapi, gfp, and mask files for each cell
         # need file_save_dir and field_name
         # use output_tif_40x_base_dir
@@ -121,7 +121,7 @@ def phenotype_well( plate_num, well_num, out_tag, output_tif_40x_base_dir, list_
         
 
         end_time_ph = datetime.datetime.now()
-        print( "time phenotyping mapped:", end_time_ph - start_time_ph )
+        print( "time phenotyping mapped:", end_time_ph - start_time_ph, flush=True )
 
         if nuclei_masks_dir == '':
             nuclei_mask_outdir = f'nuclei_masks_plate_{plate_num}_well_{well_num}_{out_tag}'
