@@ -1,0 +1,64 @@
+PROCESS_DIRECTORY: 'process_cellpose_nophenotype_all'
+MODE: 'process' # either 'process', 'paramsearch_segmentation', or 'paramsearch_read-calling'. 'paramsearch' options override
+                # the requested files and tags and performs a small grid search of NUCLEUS_AREA, THRESHOLD_DAPI, and
+                # THRESHOLD_CELL ('paramsearch_segmentation'), or of THRESHOLD_READS ('paramsearch_read-calling'). Segmentation
+                # parameters should be chosen either manually or by this parameter search prior to running 'paramsearch_read-calling'.
+REQUESTED_FILES: ['filtered_cells_combined.csv']
+# final outputs
+REQUESTED_TAGS: [
+  # the cellpose png image will be created even if not requested as a tag, but will not be saved
+  # so unless testing, should not request as a tag to avoid making it twice
+  #'cellpose_input.png', # RGB image used as input CellPose model, useful for running CellPose diameter calibration
+  'cells.csv',
+  #'phenotype.csv',
+  'filtered_reads.csv',
+  'show_reads.pdf',
+  #'aligned.tif',
+  #'annotate_SBS.tif', # LoG image overlayed with base calls
+  #'annotate_SBS_extra.tif', # LoG image overlayed with base calls annotated as mapped/unmapped
+  'annotate_segment.tif' # first cycle of SBS overlayed with cell and nuclei outlines
+]
+# discarded after processing to save space
+#TEMP_TAGS: ['maxed.tif', 'std.tif']
+TEMP_TAGS: ['aligned.tif', 'maxed.tif', 'std.tif']
+
+### INPUT TO ANALYSIS
+WELL_TILE_LIST: 'input/well_tile_list.csv'
+INCLUDE_WELLS_TILES: 'all' # either 'all' or list of [well,tile] pair lists. If running in either paramsearch modes, sites must be restricted to a subset
+INPUT_DIRECTORY: 'input'
+BARCODE_TABLE: 'barcodes_small_pool.csv'
+MAGNIFICATION: '10X'
+SBS_INPUT_TAG: 'sbs.tif'
+SBS_CYCLES: [1, 2, 3, 4, 5] # cycles to include for analysis
+SBS_CYCLE_FORMAT: 'c{cycle}-SBS-{cycle}' # python format string
+
+### ANALYSIS PARAMETERS
+SEGMENT_METHOD: 'cellpose' # either 'cell_2019' or 'cellpose'
+CELLPOSE: # not used when SEGMENT_METHOD='cell_2019'
+  # not recommended to use cycle -1 because all cycles are aligned to cycle 0 -- there are some 0s at the edges 
+  # this causes the border to be improperly cleared (i.e. a bunch of cells that actually touch the border are not really cleared)
+  CYTO_CYCLE: 0 # -1 is the last cycle
+  CYTO_CHANNEL: 4 # 0-indexed, 4="C" channel from sequencing
+  DIAMETER: 21 # calculated by running CellPose calibration (e.g., from their GUI)
+
+# morphological segmentation parameters, not used when SEGMENT_METHOD='cellpose'
+NUCLEUS_AREA: [150, 1500] # min and max nucleus area in pixels, for paramsearch_segmentation mode can be list of [min,max] lists to test
+THRESHOLD_DAPI: 4000  # threshold for segmenting nuclei, for paramsearch_segmentation mode can be list of thresholds to test
+THRESHOLD_CELL: 4500  # threshold for segmenting cells, for paramsearch_segmentation mode can be list of thresholds to test
+THRESHOLD_READS: 200  # threshold for detecting reads, for paramsearch_read-calling mode can be list of thresholds to test
+
+MAXED_WIDTH: 3
+
+### DISPLAY OPTIONS
+DISPLAY_RANGES:
+  DAPI: [500, 50000]
+  SBS_G: [1000, 50000]
+  SBS_T: [1000, 50000]
+  SBS_A: [1000, 50000]
+  SBS_C: [1000, 50000]
+LUTS:
+  DAPI: 'GRAY'
+  SBS_G: 'GREEN'
+  SBS_T: 'RED'
+  SBS_A: 'MAGENTA'
+  SBS_C: 'CYAN'
