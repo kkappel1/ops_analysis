@@ -3,7 +3,7 @@
 This example demonstrates how to analyze raw image data: starting from the SBS and phenotype tiff files, this example walks through the steps required to get to a final csv file with cells, their properties (condensates, etc.), and associated barcode(s).
 
 ## <ins>**Set up**</ins>: 
-1. Copy this directory to a location where you want to run the analysis. Then within the directory, download the required raw data (supplementary data XX from Kappel et al, XXXX). You should have two directories within the `example_data_analysis` directory: `raw_SBS_images` and `raw_phenotype_images`.
+1. Copy this directory to a location where you want to run the analysis. Then within the directory, download the required raw data (supplementary file `raw_data_for_example.zip` from Kappel et al., submitted), and unzip it. You should have two directories within the `example_data_analysis` directory: `raw_SBS_images` and `raw_phenotype_images`.
 
 2. Set up SBS analysis code (slightly modified version of Blainey Lab code): <br>
    `git clone git@github.com:kkappel1/OpticalPooledScreens2023.git`
@@ -34,7 +34,7 @@ snakemake --cores 6 -s OpticalPooledScreens_nophenotype.smk --configfile config_
 
 4. Segment the nuclei in the phenotype images:
 ```
-python {PATH_TO_OPS_ANALYSIS}/ops_analysis/image_analysis/segment_nuclei_cellpose.py -plate_num 6 -well_num B5 -out_tag example -output_tif_40x_base_dir process_phenotype/ -use_gpu -list_dapi_files
+python {PATH_TO_OPS_ANALYSIS}/ops_analysis/image_analysis/segment_nuclei_cellpose.py -plate_num 6 -well_num B5 -out_tag example -output_tif_40x_base_dir process_phenotype/ -use_gpu -list_dapi_files raw_phenotype_images/*-ch1* -num_proc 1
 ```
 **Replace `{PATH_TO_OPS_ANALYSIS}` with the path to your `ops_analysis/` directory.** <br>
 *Expected run time*: ~5-10 minutes. <br>
