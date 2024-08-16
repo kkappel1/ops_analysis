@@ -34,7 +34,7 @@ snakemake --cores 6 -s OpticalPooledScreens_nophenotype.smk --configfile config_
 
 4. Segment the nuclei in the phenotype images:
 ```
-python {PATH_TO_OPS_ANALYSIS}/ops_analysis/image_analysis/segment_nuclei_cellpose.py -plate_num 6 -well_num B5 -out_tag example -output_tif_40x_base_dir process_phenotype/ -use_gpu -list_dapi_files
+python {PATH_TO_OPS_ANALYSIS}/ops_analysis/image_analysis/segment_nuclei_cellpose.py -plate_num 6 -well_num B5 -out_tag example -output_tif_40x_base_dir process_phenotype/ -use_gpu -list_dapi_files raw_phenotype_images/*-ch1* -num_proc 1
 ```
 **Replace `{PATH_TO_OPS_ANALYSIS}` with the path to your `ops_analysis/` directory.** <br>
 *Expected run time*: ~5-10 minutes. <br>
