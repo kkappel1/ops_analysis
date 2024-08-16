@@ -19,4 +19,4 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-See 
+See `example_image_analysis` subdirectory for examples of using this code to analyze images.
