@@ -19,4 +19,6 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
+Typical installation time: <5 minutes.
+
 See `example_image_analysis` subdirectory for examples of using this code to analyze images.
